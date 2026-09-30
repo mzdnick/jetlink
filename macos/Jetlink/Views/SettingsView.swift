@@ -37,7 +37,11 @@ struct GeneralSettingsView: View {
         }
         VStack(alignment: .leading, spacing: 4) {
           Toggle("Keep the Mac awake while serving", isOn: $settings.keepAwakeWhileServing)
-          Text("Only when connected to power. On battery, keep the lid open.")
+            .onChange(of: settings.keepAwakeWhileServing) { server.keepAwakeSettingChanged() }
+          Toggle("Also on battery power", isOn: $settings.keepAwakeOnBattery)
+            .disabled(!settings.keepAwakeWhileServing)
+            .onChange(of: settings.keepAwakeOnBattery) { server.keepAwakeSettingChanged() }
+          Text("By default the Mac stays awake only on power. A closed lid may still sleep the Mac.")
             .font(.callout)
             .foregroundStyle(.secondary)
         }
