@@ -113,7 +113,7 @@ struct ServerSettingsView: View {
             .fixedSize(horizontal: false, vertical: true)
         }
         Picker("Connection", selection: $settings.transport) {
-          Text("USB (the comma)").tag(TransportChoice.usb)
+          Text("USB (comma)").tag(TransportChoice.usb)
           Text("TCP (bench client)").tag(TransportChoice.tcp)
         }
         if settings.transport == .tcp {
@@ -136,9 +136,9 @@ struct ServerSettingsView: View {
   static func backendCaption(_ backend: BackendChoice) -> String {
     switch backend {
     case .auto:
-      "Recommended: the fastest on Apple silicon. Preparing takes about 20 seconds the first time."
+      "Recommended: most efficient on Apple silicon. Initial preparation takes about 20 seconds."
     case .coreml:
-      "Slower. Use it if another app keeps the Neural Engine busy."
+      "Less efficient than using ANE, runs inference using the GPU. Use if CoreML with Neural Engine is too slow."
     }
   }
 }
