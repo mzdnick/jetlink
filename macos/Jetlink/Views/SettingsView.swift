@@ -36,18 +36,18 @@ struct GeneralSettingsView: View {
           }
         }
         VStack(alignment: .leading, spacing: 4) {
-          Toggle("Keep the Mac awake while serving", isOn: $settings.keepAwakeWhileServing)
+          Toggle("Prevent sleep while server is running", isOn: $settings.keepAwakeWhileServing)
             .onChange(of: settings.keepAwakeWhileServing) { server.keepAwakeSettingChanged() }
-          Toggle("Also on battery power", isOn: $settings.keepAwakeOnBattery)
+          Toggle("Also when on battery", isOn: $settings.keepAwakeOnBattery)
             .disabled(!settings.keepAwakeWhileServing)
             .onChange(of: settings.keepAwakeOnBattery) { server.keepAwakeSettingChanged() }
-          Text("By default the Mac stays awake only on power. A closed lid may still sleep the Mac.")
+          Text("By default, sleep prevention applies only on power. Closing the lid may still put the Mac to sleep.")
             .font(.callout)
             .foregroundStyle(.secondary)
         }
       }
 
-      Section("Cache Folder") {
+      Section("Cache folder") {
         VStack(alignment: .leading, spacing: 8) {
           Text(settings.cacheDirectory.path(percentEncoded: false))
             .font(.system(.callout, design: .monospaced))
