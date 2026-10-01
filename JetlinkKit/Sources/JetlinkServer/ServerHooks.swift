@@ -1,4 +1,5 @@
 import Foundation
+import JetlinkKit
 
 /// What the USB loop and the sessions tell a host that suspends while the
 /// comma is gone: the Python serve loop's `touch` and `idle` calls.
@@ -19,6 +20,10 @@ public struct ServerHooks: Sendable {
   public var telemetry: @Sendable () -> [String: Any]
   /// "nominal", "fair", "serious" or "critical", for the benchmark's reports.
   public var thermal: @Sendable () -> String
+  /// The CPU and GPU temperatures in °C to a tenth, where the host says them:
+  /// the SMC's numbers on a Mac. nil dies are the ones it does not know, and
+  /// a nil altogether leaves the benchmark's reports to the thermal words.
+  public var temperatures: @Sendable () -> BenchmarkTemps?
   /// HELLO_RESP's `sleep_after`, the seconds without a gadget before this host
   /// suspends; 0, it never does, and the comma holds the gadget all park.
   public var sleepAfter: Double
@@ -37,6 +42,7 @@ public struct ServerHooks: Sendable {
   public init(
     telemetry: @escaping @Sendable () -> [String: Any] = { [:] },
     thermal: @escaping @Sendable () -> String = { platformThermal() },
+    temperatures: @escaping @Sendable () -> BenchmarkTemps? = { platformTemperatures() },
     sleepAfter: Double = 0,
     gadgetIdle: (@Sendable (GadgetIdleEvent) -> Bool)? = nil,
     shutdown: (@Sendable (_ reason: String) -> (@Sendable () -> Void)?)? = nil,
@@ -44,6 +50,7 @@ public struct ServerHooks: Sendable {
   ) {
     self.telemetry = telemetry
     self.thermal = thermal
+    self.temperatures = temperatures
     self.sleepAfter = sleepAfter
     self.gadgetIdle = gadgetIdle
     self.shutdown = shutdown

@@ -480,16 +480,52 @@ public struct BenchmarkStats: Codable, Sendable, Equatable {
   public static let empty = BenchmarkStats(mean: 0, p50: 0, p90: 0, p99: 0, max: 0)
 }
 
+/// The host's temperatures as a benchmark sampled them, in °C to a tenth.
+/// Either die is nil where the platform does not say: an iPhone tells apps no
+/// temperature at all, a Linux box knows its GPU but not its CPU.
+public struct BenchmarkTemps: Codable, Sendable, Equatable {
+  public enum Die: Sendable { case cpu, gpu }
+
+  public let cpu: Double?
+  public let gpu: Double?
+
+  public init(cpu: Double?, gpu: Double?) {
+    self.cpu = cpu
+    self.gpu = gpu
+  }
+
+  /// "CPU 61.2 · GPU 70.4 °C", only the dies that say.
+  public var text: String {
+    let parts = [
+      cpu.map { "CPU \($0.formatted(.number.precision(.fractionLength(1))))" },
+      gpu.map { "GPU \($0.formatted(.number.precision(.fractionLength(1))))" },
+    ].compactMap { $0 }
+    return parts.joined(separator: " · ") + " °C"
+  }
+
+  /// The same reading as one word for the log line, "61.2/70.4".
+  public var shortText: String {
+    let parts = [
+      cpu.map { $0.formatted(.number.precision(.fractionLength(1))) },
+      gpu.map { $0.formatted(.number.precision(.fractionLength(1))) },
+    ].compactMap { $0 }
+    return parts.joined(separator: "/")
+  }
+}
+
 /// One window of a benchmark, with the device's thermal state as it closed.
 public struct BenchmarkWindow: Codable, Sendable, Equatable {
   public let startSecond: Int
   public let frame: BenchmarkStats
   public let thermal: String
+  /// The die temperatures as the window closed; nil where none are known.
+  public let temp: BenchmarkTemps?
 
-  public init(startSecond: Int, frame: BenchmarkStats, thermal: String) {
+  public init(startSecond: Int, frame: BenchmarkStats, thermal: String, temp: BenchmarkTemps? = nil) {
     self.startSecond = startSecond
     self.frame = frame
     self.thermal = thermal
+    self.temp = temp
   }
 }
 
@@ -514,12 +550,16 @@ public struct BenchmarkReport: Codable, Sendable, Equatable {
   public let windows: [BenchmarkWindow]
   public let thermalAtStart: String
   public let thermalAtEnd: String
+  /// The die temperatures at the start and the end; nil where none are known,
+  /// and the thermal words then say what there is to say.
+  public let tempAtStart: BenchmarkTemps?
+  public let tempAtEnd: BenchmarkTemps?
   public let cancelled: Bool
 
   public init(
     sha256: String, device: String, seconds: Double, frames: Int, frame: BenchmarkStats, accelerator: BenchmarkStats, queues: BenchmarkStats,
     output: BenchmarkStats, build: String, over35: Int, over50: Int, windows: [BenchmarkWindow], thermalAtStart: String, thermalAtEnd: String,
-    cancelled: Bool
+    cancelled: Bool, tempAtStart: BenchmarkTemps? = nil, tempAtEnd: BenchmarkTemps? = nil
   ) {
     self.sha256 = sha256
     self.device = device
@@ -535,6 +575,8 @@ public struct BenchmarkReport: Codable, Sendable, Equatable {
     self.windows = windows
     self.thermalAtStart = thermalAtStart
     self.thermalAtEnd = thermalAtEnd
+    self.tempAtStart = tempAtStart
+    self.tempAtEnd = tempAtEnd
     self.cancelled = cancelled
   }
 
@@ -552,15 +594,34 @@ public struct BenchmarkReport: Codable, Sendable, Equatable {
       "queues       \(f(queues))",
       "output       \(f(output))",
       "over 35 ms: \(over35)   over 50 ms: \(over50)",
-      "temperature: \(thermalAtStart) at start, \(thermalAtEnd) at end",
+      temperatureLine,
     ]
     if !windows.isEmpty {
-      lines.append("by window:")
+      lines.append(tempAtEnd == nil && tempAtStart == nil ? "by window:" : "by window (CPU/GPU °C):")
       for w in windows {
-        lines.append(String(format: "  %4d s  mean %5.1f  p99 %5.1f  max %5.1f ms  ", w.startSecond, w.frame.mean, w.frame.p99, w.frame.max) + w.thermal)
+        lines.append(String(format: "  %4d s  mean %5.1f  p99 %5.1f  max %5.1f ms  ", w.startSecond, w.frame.mean, w.frame.p99, w.frame.max) + windowTemp(w))
       }
     }
     return lines.joined(separator: "\n")
+  }
+
+  /// The temperatures at start and end in °C, or the thermal words where no
+  /// values exist (an iPhone), so the line never goes blank.
+  private var temperatureLine: String {
+    switch (tempAtStart, tempAtEnd) {
+    case (let start?, let end?):
+      return "temperature: \(start.text) at start, \(end.text) at end"
+    case (nil, let end?):
+      return "temperature: \(end.text) at end"
+    case (let start?, nil):
+      return "temperature: \(start.text) at start"
+    default:
+      return "temperature: \(thermalAtStart) at start, \(thermalAtEnd) at end"
+    }
+  }
+
+  private func windowTemp(_ w: BenchmarkWindow) -> String {
+    w.temp.map { "\($0.shortText) °C" } ?? w.thermal
   }
 }
 

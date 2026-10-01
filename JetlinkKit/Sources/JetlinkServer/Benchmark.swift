@@ -56,6 +56,17 @@ public func platformThermal() -> String {
   #endif
 }
 
+/// The host's CPU and GPU temperatures, in °C to a tenth, where it says them:
+/// a Mac's SMC, the numbers macmon shows. nil elsewhere; the Linux daemon
+/// passes its GPU's own reading instead, an iPhone has none to give.
+public func platformTemperatures() -> BenchmarkTemps? {
+  #if os(macOS)
+    SMCSensors.shared.read()
+  #else
+    nil
+  #endif
+}
+
 #if canImport(Darwin)
   func thermalLabel(_ state: ProcessInfo.ThermalState) -> String {
     switch state {
@@ -156,6 +167,7 @@ extension EngineHost {
     var windows: [BenchmarkWindow] = []
     var windowFrames: [Double] = []
     let thermalAtStart = hooks.thermal()
+    let tempAtStart = hooks.temperatures()
     let period = 1.0 / Double(ModelConstants.runFrequency)
     let warmup = EngineHost.benchmarkWarmup
     let build = EngineHost.buildLine(l.engine)
@@ -171,7 +183,8 @@ extension EngineHost {
         .benchmark(
           BenchmarkEvent(
             state: "running", elapsed: round2(ProcessInfo.processInfo.systemUptime - t0), total: seconds, frames: frameMs.count,
-            frame: BenchmarkStats.of(frameMs), report: nil, detail: last.map { "window \($0.startSecond) s: \($0.thermal)" } ?? "")))
+            frame: BenchmarkStats.of(frameMs), report: nil,
+            detail: last.map { "window \($0.startSecond) s: \($0.temp?.shortText ?? $0.thermal)" } ?? "")))
     }
     while !run.cancelled {
       let elapsed = ProcessInfo.processInfo.systemUptime - t0
@@ -226,7 +239,7 @@ extension EngineHost {
       let second = Int(ProcessInfo.processInfo.systemUptime - t0)
       if second - windowStart >= EngineHost.benchmarkWindow {
         let window = BenchmarkWindow(
-          startSecond: windowStart, frame: BenchmarkStats.of(windowFrames), thermal: hooks.thermal())
+          startSecond: windowStart, frame: BenchmarkStats.of(windowFrames), thermal: hooks.thermal(), temp: hooks.temperatures())
         windows.append(window)
         windowFrames.removeAll(keepingCapacity: true)
         windowStart = second
@@ -237,12 +250,13 @@ extension EngineHost {
     }
     if !windowFrames.isEmpty {
       windows.append(
-        BenchmarkWindow(startSecond: windowStart, frame: BenchmarkStats.of(windowFrames), thermal: hooks.thermal()))
+        BenchmarkWindow(startSecond: windowStart, frame: BenchmarkStats.of(windowFrames), thermal: hooks.thermal(), temp: hooks.temperatures()))
     }
     return BenchmarkReport(
       sha256: l.sha256, device: device, seconds: round2(ProcessInfo.processInfo.systemUptime - t0), frames: frameMs.count,
       frame: BenchmarkStats.of(frameMs), accelerator: BenchmarkStats.of(accelMs), queues: BenchmarkStats.of(queueMs), output: BenchmarkStats.of(outMs),
       build: build, over35: frameMs.filter { $0 > 35 }.count, over50: frameMs.filter { $0 > 50 }.count, windows: windows,
-      thermalAtStart: thermalAtStart, thermalAtEnd: hooks.thermal(), cancelled: run.cancelled)
+      thermalAtStart: thermalAtStart, thermalAtEnd: hooks.thermal(), cancelled: run.cancelled,
+      tempAtStart: tempAtStart, tempAtEnd: hooks.temperatures())
   }
 }

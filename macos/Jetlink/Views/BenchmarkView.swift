@@ -50,9 +50,7 @@ struct BenchmarkView: View {
           LabeledContent("Over 35 ms", value: report.over35.formatted())
           LabeledContent("Model alone", value: "\(FrameBudgetView.ms(report.accelerator.mean)) mean")
           LabeledContent("Temperature") {
-            let end = ThermalLevel(label: report.thermalAtEnd)
-            Label(end.title, systemImage: end.symbol)
-              .foregroundStyle(end.tone)
+            TemperatureLabel(temp: report.tempAtEnd, thermal: ThermalLevel(label: report.thermalAtEnd))
           }
         } header: {
           Text(report.cancelled ? "Result (stopped early)" : "Result")

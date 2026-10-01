@@ -224,9 +224,12 @@ struct BenchmarkScreen: View {
       }
       GridRow {
         MetricTile(
-          title: "Temperature", systemImage: ThermalLevel(label: report.thermalAtEnd).symbol, tint: .orange,
-          value: ThermalLevel(label: report.thermalAtEnd).title,
-          note: report.thermalAtStart == report.thermalAtEnd ? "Throughout" : "From \(ThermalLevel(label: report.thermalAtStart).title.lowercased())",
+          title: "Temperature", systemImage: "thermometer.medium", tint: .orange,
+          value: report.tempAtEnd?.shortText ?? ThermalLevel(label: report.thermalAtEnd).title,
+          unit: report.tempAtEnd == nil ? nil : "°C",
+          note: report.tempAtEnd == nil
+            ? (report.thermalAtStart == report.thermalAtEnd ? "Throughout" : "From \(ThermalLevel(label: report.thermalAtStart).title.lowercased())")
+            : "CPU / GPU at the end",
           noteTone: ThermalLevel(label: report.thermalAtEnd).tone)
         MetricTile(
           title: "Model", systemImage: "cpu", tint: .purple, value: report.accelerator.mean.formatted(.number.precision(.fractionLength(1))), unit: "ms",

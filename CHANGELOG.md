@@ -1,3 +1,8 @@
+Unreleased
+==========
+**Benchmark**
+* **Temperatures in °C:** A Mac's benchmark reports the CPU and GPU temperatures the SMC measures, to a tenth of a degree, instead of the words "Normal" and "Warm": in the result, in every window row, and in the copied report text. A Linux box reports its GPU the same way. An iPhone has no temperature to give apps, so its benchmarks keep the thermal words.
+
 Jetlink v0.7.3
 ==============
 **General Updates & Fixes**

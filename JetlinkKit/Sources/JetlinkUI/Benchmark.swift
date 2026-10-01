@@ -130,6 +130,33 @@
     }
   }
 
+  /// The temperatures a benchmark sample carries, "CPU 61.2 · GPU 70.4 °C" or
+  /// "61.2/70.4 °C" in a tight row. Only where the platform says no
+  /// temperature — an iPhone — does the thermal word stand in, and then only
+  /// the tone says more than the words: heat that throttles stays colored.
+  public struct TemperatureLabel: View {
+    let temp: BenchmarkTemps?
+    let thermal: ThermalLevel
+    /// "61.2/70.4" for window rows, "CPU 61.2 · GPU 70.4" where there is room.
+    let compact: Bool
+
+    public init(temp: BenchmarkTemps?, thermal: ThermalLevel, compact: Bool = false) {
+      self.temp = temp
+      self.thermal = thermal
+      self.compact = compact
+    }
+
+    public var body: some View {
+      if let temp {
+        Label(compact ? "\(temp.shortText) °C" : temp.text, systemImage: "thermometer.medium")
+          .foregroundStyle(thermal.note == nil ? Color.secondary : thermal.tone)
+      } else {
+        Label(thermal.title, systemImage: thermal.symbol)
+          .foregroundStyle(thermal.tone)
+      }
+    }
+  }
+
   public enum BenchmarkClock {
     /// "1:00" for 60 seconds.
     public static func text(_ seconds: Double) -> String {
@@ -220,8 +247,7 @@
             Text("P99 \(FrameBudgetView.ms(window.frame.p99))")
               .foregroundStyle(verdict == .good ? .primary : verdict.tone)
             Spacer()
-            Label(thermal.title, systemImage: thermal.symbol)
-              .foregroundStyle(thermal.tone)
+            TemperatureLabel(temp: window.temp, thermal: thermal, compact: true)
               .labelStyle(.titleAndIcon)
           }
           .font(.subheadline.monospacedDigit())

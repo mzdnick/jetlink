@@ -79,5 +79,41 @@ struct ControlProtocolTests {
     #expect(written["thermal_at_end"] as? String == "fair" && written["over35"] as? Int == 3)
     #expect((written["windows"] as? [[String: Any]])?.first?["start_second"] as? Int == 0)
     #expect(report.text.contains("over 35 ms: 3"))
+    #expect(report.text.contains("temperature: nominal at start, fair at end"))
+  }
+
+  @Test func aReportCarriesTemperaturesAndOldOnesStillRead() throws {
+    let temps = BenchmarkTemps(cpu: 58.2, gpu: 60.0)
+    let report = BenchmarkReport(
+      sha256: String(repeating: "a", count: 64), device: "coreml-GPU", seconds: 60, frames: 1195, frame: BenchmarkStats.empty,
+      accelerator: BenchmarkStats.empty, queues: BenchmarkStats.empty, output: BenchmarkStats.empty, build: "Release build", over35: 0,
+      over50: 0,
+      windows: [BenchmarkWindow(startSecond: 0, frame: BenchmarkStats.empty, thermal: "nominal", temp: temps)],
+      thermalAtStart: "nominal", thermalAtEnd: "fair", cancelled: false, tempAtStart: temps, tempAtEnd: BenchmarkTemps(cpu: 61.4, gpu: 70.9))
+    let object = try line(.benchmark(BenchmarkEvent(state: "done", elapsed: 60, total: 60, frames: 1195, frame: nil, report: report, detail: "")))
+    let written = try #require(object["report"] as? [String: Any])
+    let atEnd = written["temp_at_end"] as? [String: Any]
+    #expect(atEnd?["cpu"] as? Double == 61.4 && atEnd?["gpu"] as? Double == 70.9)
+    #expect((written["windows"] as? [[String: Any]])?.first?["temp"] != nil)
+    // The text a report pastes: values in °C, and the words where none exist.
+    #expect(report.text.contains("temperature: CPU 58.2 · GPU 60.0 °C at start, CPU 61.4 · GPU 70.9 °C at end"))
+    #expect(report.text.contains("by window (CPU/GPU °C):"))
+    #expect(report.text.contains(" 58.2/60.0 °C"))
+  }
+
+  @Test func aReportWithoutTemperaturesDecodes() throws {
+    // A report from before the temperatures, as an older server sent it.
+    let json = """
+      {"sha256":"a","device":"cpu","seconds":1,"frames":1,"frame":{"mean":1,"p50":1,"p90":1,"p99":1,"max":1},\
+      "accelerator":{"mean":1,"p50":1,"p90":1,"p99":1,"max":1},"queues":{"mean":1,"p50":1,"p90":1,"p99":1,"max":1},\
+      "output":{"mean":1,"p50":1,"p90":1,"p99":1,"max":1},"build":"b","over35":0,"over50":0,\
+      "windows":[{"start_second":0,"frame":{"mean":1,"p50":1,"p90":1,"p99":1,"max":1},"thermal":"nominal"}],\
+      "thermal_at_start":"nominal","thermal_at_end":"nominal","cancelled":false}
+      """
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    let report = try decoder.decode(BenchmarkReport.self, from: Data(json.utf8))
+    #expect(report.tempAtStart == nil && report.tempAtEnd == nil && report.windows.first?.temp == nil)
+    #expect(report.text.contains("temperature: nominal at start, nominal at end"))
   }
 }

@@ -19,6 +19,7 @@
       if let telemetry {
         hooks.telemetry = telemetry.read
         hooks.thermal = thermal(telemetry)
+        hooks.temperatures = temperatures(telemetry)
       }
 
       // Made whether or not this server sleeps, so `jetlink caffeinate`
@@ -43,6 +44,16 @@
       }
       hooks.shutdown = PowerOff.hook(enabled: poweroff)
       return hooks
+    }
+
+    /// The benchmark's temperatures from the same reading: the GPU's, which a
+    /// Jetson's junction or a card's NVML sensor says. The CPU's is not
+    /// carried, because this host's telemetry does not have it.
+    public static func temperatures(_ telemetry: GPUTelemetry?) -> @Sendable () -> BenchmarkTemps? {
+      {
+        guard let celsius = telemetry?.read()["temp_c"] as? Double, celsius > 0 else { return nil }
+        return BenchmarkTemps(cpu: nil, gpu: (celsius * 10).rounded() / 10)
+      }
     }
 
     /// The benchmark's thermal state from the GPU's temperature, a Jetson's
