@@ -13,6 +13,10 @@ final class AppState {
   let logs: LogBuffer
   let loginItem: LoginItem
 
+  /// Which tab the Settings window shows, so a screen can send the user to a
+  /// tab (Status to Server, for a backend change) before opening it.
+  var settingsTab: SettingsTab = .general
+
   @ObservationIgnored private let log = Logger(subsystem: "io.zoompilot.jetlink", category: "app")
   @ObservationIgnored private var launched = false
 

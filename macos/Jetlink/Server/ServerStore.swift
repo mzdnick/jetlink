@@ -244,8 +244,19 @@ final class ServerStore: ServerControlling {
   }
 
   private func resetLiveState() {
+    // With the description gone, the screens fall back to the settings, so a
+    // backend change shows while the server is stopped too.
+    info = nil
     state.serverStopped()
     startedAt = nil
+  }
+
+  /// True while the running server's backend is no longer the one the setting
+  /// names: the screens show the new choice with a mark until the server
+  /// restarts onto it.
+  var backendChangeIsPending: Bool {
+    guard case .serving = runState, let running = info?.choice else { return false }
+    return running != settings.backend
   }
 
   private func updateSleepAssertion() {

@@ -5,10 +5,12 @@ import SwiftUI
 
 /// What the server, the comma and the engine are doing right now.
 struct StatusView: View {
+  @Environment(AppState.self) private var appState
   @Environment(ServerStore.self) private var server
   @Environment(ModelStore.self) private var models
   @Environment(AppSettings.self) private var settings
   @Environment(LogBuffer.self) private var logs
+  @Environment(\.openSettings) private var openSettings
   @Binding var selection: SidebarItem?
   @State private var confirmingUnload = false
 
@@ -38,9 +40,21 @@ struct StatusView: View {
       }
       LabeledContent("Backend") {
         VStack(alignment: .trailing, spacing: 2) {
-          Text((server.info?.choice ?? settings.backend).title)
+          Button {
+            appState.settingsTab = .server
+            openSettings()
+          } label: {
+            Text((server.info?.choice ?? settings.backend).title)
+          }
+          .buttonStyle(.link)
+          .help("Change the backend in Settings")
           if let info = server.info {
             Text(StatusView.runtimeLine(version: info.runtimeVersion, device: info.device))
+              .font(.callout)
+              .foregroundStyle(.secondary)
+          }
+          if server.backendChangeIsPending {
+            Text(StatusView.pendingBackendLine(settings.backend))
               .font(.callout)
               .foregroundStyle(.secondary)
           }
@@ -326,6 +340,11 @@ struct StatusView: View {
     hardware = hardware.replacingOccurrences(of: "_", with: " ")
     let head = version.isEmpty ? "onnxruntime" : "onnxruntime \(version)"
     return hardware.isEmpty ? head : "\(head), \(hardware)"
+  }
+
+  /// What a backend change says while the server still runs the old one.
+  static func pendingBackendLine(_ choice: BackendChoice) -> String {
+    "Switches to \(choice.title) when the server restarts."
   }
 
   static func uptimeText(from start: Date, to now: Date) -> String {

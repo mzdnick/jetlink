@@ -2,13 +2,26 @@ import AppKit
 import JetlinkUI
 import SwiftUI
 
+/// The tabs of the Settings window. The selection lives in `AppState` so a
+/// screen can open the window on a tab.
+enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
+  case general, server
+
+  var id: String { rawValue }
+}
+
 struct SettingsView: View {
+  @Environment(AppState.self) private var appState
+
   var body: some View {
-    TabView {
+    @Bindable var appState = appState
+    TabView(selection: $appState.settingsTab) {
       GeneralSettingsView()
         .tabItem { Label("General", systemImage: "gear") }
+        .tag(SettingsTab.general)
       ServerSettingsView()
         .tabItem { Label("Server", systemImage: "cpu") }
+        .tag(SettingsTab.server)
     }
     .frame(width: 540)
   }

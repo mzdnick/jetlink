@@ -26,7 +26,7 @@ struct ToolbarActivityView: View {
       .onTapGesture { navigation.selection = .status }
       .help("Open Status")
       .accessibilityElement(children: .ignore)
-      .accessibilityLabel("\(modelName), \(backendName), \(summary.0)")
+      .accessibilityLabel("\(modelName), \(backendName)\(server.backendChangeIsPending ? ", change pending" : ""), \(summary.0)")
       .accessibilityAddTraits(.isButton)
       .accessibilityAction { navigation.selection = .status }
   }
@@ -38,6 +38,12 @@ struct ToolbarActivityView: View {
         .font(.system(size: 9, weight: .semibold))
         .foregroundStyle(.tertiary)
       crumb(backendName, symbol: "cpu")
+      if server.backendChangeIsPending {
+        Image(systemName: "arrow.triangle.2.circlepath")
+          .font(.system(size: 10, weight: .semibold))
+          .foregroundStyle(.orange)
+          .help("The server still runs \(runningBackendName); it switches when the server restarts")
+      }
       Spacer(minLength: 16)
       Text(summary.0)
         .foregroundStyle(statusColor)
@@ -104,9 +110,15 @@ struct ToolbarActivityView: View {
     return models.row(for: sha)?.displayName ?? "Model \(sha.prefix(8))"
   }
 
-  /// Short enough for the crumb; Status has the full description.
+  /// The setting's choice, not the running server's, so the crumb moves the
+  /// moment the setting does; the mark covers the time they disagree. Status
+  /// has the full description of what is running.
   private var backendName: String {
-    (server.info?.choice ?? settings.backend).shortTitle
+    settings.backend.shortTitle
+  }
+
+  private var runningBackendName: String {
+    server.info?.choice.shortTitle ?? settings.backend.shortTitle
   }
 
   private var statusColor: Color {

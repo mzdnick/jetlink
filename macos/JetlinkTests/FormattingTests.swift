@@ -22,6 +22,12 @@ struct FormattingTests {
     #expect(BackendChoice.auto.shortTitle == "Neural Engine")
   }
 
+  @Test("A pending backend change names where the server lands")
+  func pendingBackendLine() {
+    #expect(StatusView.pendingBackendLine(.coreml) == "Switches to CoreML (GPU) when the server restarts.")
+    #expect(StatusView.pendingBackendLine(.auto) == "Switches to CoreML with Neural Engine when the server restarts.")
+  }
+
   @Test("An uptime under a minute says so instead of showing zero")
   func uptime() {
     let start = Date(timeIntervalSince1970: 1_757_440_000)

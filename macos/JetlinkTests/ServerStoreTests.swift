@@ -95,5 +95,21 @@ struct ServerStoreTests {
     transport.close()
     await store.stopAndWait()
     #expect(store.runState == .stopped)
+    // The description goes with the server, so the screens fall back to the
+    // settings instead of the last run's backend.
+    #expect(store.info == nil)
+  }
+
+  /// A backend change is pending only while the server runs a different
+  /// backend than the setting names.
+  @MainActor @Test func aBackendChangeIsPendingOnlyWhileServingOnTheOldOne() {
+    let serving = ServerStore.preview(runState: .serving, info: PreviewData.serverInfo, link: .waiting, engine: .none)
+    // The preview settings say Automatic, the served description CoreML.
+    #expect(serving.backendChangeIsPending)
+    serving.settings.backend = .coreml
+    #expect(!serving.backendChangeIsPending)
+
+    let stopped = ServerStore.preview(runState: .stopped, info: PreviewData.serverInfo, link: .waiting, engine: .none)
+    #expect(!stopped.backendChangeIsPending)
   }
 }
