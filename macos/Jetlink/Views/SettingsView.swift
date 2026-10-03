@@ -35,6 +35,9 @@ struct GeneralSettingsView: View {
             Button("Open Login Items") { loginItem.openSystemSettings() }
           }
         }
+      }
+
+      Section("Sleep") {
         VStack(alignment: .leading, spacing: 4) {
           Toggle("Prevent sleep while server is running", isOn: $settings.keepAwakeWhileServing)
             .onChange(of: settings.keepAwakeWhileServing) { server.keepAwakeSettingChanged() }
