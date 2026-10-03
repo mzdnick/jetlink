@@ -37,8 +37,18 @@ private enum Amph {
     guard installed else { return .notInstalled }
     let (active, _) = script(runner: runner, "tell application id \"\(bundleID)\"\nsession is active\nend tell")
     if active == "true" {
-      log.info("an Amphetamine session is already active; leaving it alone")
-      return .foreign
+      // Another session is up. Replace it only when ours lasts at least as
+      // long: a shorter one would end mid-serve and drop the protection this
+      // setting promises, while an infinite or trigger-driven one (zero or
+      // negative seconds left) must never be downgraded. Unknown reads stand
+      // down.
+      let (remainingText, _) = script(runner: runner, "tell application id \"\(bundleID)\"\nsession time remaining\nend tell")
+      let remaining = remainingText.flatMap(Int.init)
+      guard let remaining, remaining > 0, remaining <= sessionHours * 3600 else {
+        log.info("an Amphetamine session with \(remainingText ?? "unreadable", privacy: .public) s left is already active; leaving it alone")
+        return .foreign
+      }
+      log.info("replacing an Amphetamine session with \(remaining, privacy: .public) s left")
     }
     let (_, startError) = script(runner: runner, "tell application id \"\(bundleID)\"\nstart new session with options {duration:\(sessionHours), interval:hours, displaySleepAllowed:false}\nend tell")
     if let startError { return denied(startError) ? .denied : .failed(startError) }
@@ -135,10 +145,11 @@ private enum Amph {
 /// Amphetamine's sessions survive a lid close on this OS (measured
 /// 2026-10-03: assertions identical to its own, held by this app, did not), so
 /// the battery keep-awake borrows the one holder powerd honors. A session the
-/// user started is left alone, and only a session this keeper started is
-/// ended — when serving stops, or when the battery reaches its floor so a
-/// closed-lid Mac cannot run itself flat. The first script asks macOS for
-/// permission to control Amphetamine.
+/// user started with more time left than ours is left alone and inherited
+/// when it ends; a shorter one is replaced at once. Only a session this
+/// keeper started is ended — when serving stops, or when the battery reaches
+/// its floor so a closed-lid Mac cannot run itself flat. The first script
+/// asks macOS for permission to control Amphetamine.
 @MainActor
 @Observable
 final class AmphetamineKeeper {
@@ -174,9 +185,10 @@ final class AmphetamineKeeper {
   /// actually stops. Power-source churn re-calls setActive(true) constantly,
   /// so only a real stop clears this.
   private var expired = false
-  /// Until this instant an end attempt is on backoff, so a failed end retries
-  /// on the health tick instead of in a tight loop. Cleared by a real end.
-  private var nextEndAttempt: Date?
+  /// Until this instant the next start or end attempt is on backoff, so a
+  /// failed end retries on the health tick and a stood-down foreign session
+  /// is polled instead of spun on. Cleared by a real start or end.
+  private var nextAttempt: Date?
   private var floorTimer: Timer?
   private let queue = DispatchQueue(label: "io.zoompilot.jetlink.amphetamine", qos: .utility)
   private let runner: (String) -> (String?, String?)
@@ -233,9 +245,9 @@ final class AmphetamineKeeper {
     let belowFloor = floor.flatMap { percent in batteryLevel().map { $0 < percent } } ?? false
     let endForFloor = startedSession && belowFloor
     let verifyLive = verify && startedSession && desiredActive && !belowFloor
-    let start = desiredActive && !startedSession && !belowFloor && !expired
-    let endReady = nextEndAttempt.map { clock() >= $0 } ?? true
-    let end = endReady && ((!desiredActive && startedSession) || endForFloor)
+    let ready = nextAttempt.map { clock() >= $0 } ?? true
+    let start = ready && desiredActive && !startedSession && !belowFloor && !expired
+    let end = ready && ((!desiredActive && startedSession) || endForFloor)
     guard start || end || verifyLive else {
       if desiredActive, !startedSession, belowFloor, !expired, let floor {
         status = .batteryFloor(floor)
@@ -270,10 +282,13 @@ final class AmphetamineKeeper {
       startedHours = hours
       lastKnownRemaining = nil
       self.lidUnsafe = !lidSafe
+      nextAttempt = nil
       status = lidSafe ? .active : .maySleepWhenClosed
       startHealthTimer()
     case .foreign:
-      blocked = true
+      // stand down without blocking: the health tick polls the session, and
+      // the first start after it ends inherits the job
+      nextAttempt = clock().addingTimeInterval(10)
       status = .foreignSession
     case .notInstalled:
       blocked = true
@@ -288,13 +303,13 @@ final class AmphetamineKeeper {
       startedSession = false
       startedHours = nil
       lidUnsafe = false
-      nextEndAttempt = nil
+      nextAttempt = nil
       stopHealthTimer()
       status = floor.map(Status.batteryFloor) ?? .idle
     case .endFailed(let message):
       // the session is still up and the serve still wants it down, so leave
       // blocked alone: the health tick retries the end after the backoff
-      nextEndAttempt = clock().addingTimeInterval(10)
+      nextAttempt = clock().addingTimeInterval(10)
       status = .failed(message)
     case .alive(let remaining):
       lastKnownRemaining = remaining

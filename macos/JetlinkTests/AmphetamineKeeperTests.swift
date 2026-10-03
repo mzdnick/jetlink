@@ -62,15 +62,56 @@ private func waitUntil(_ condition: @escaping () -> Bool) async -> Bool {
     #expect(keeper.status == .idle)
   }
 
-  @MainActor @Test func leavesASessionTheUserStartedAlone() async {
-    let runner = RecordingRunner(replies: [("true", nil)])
+  @MainActor @Test func leavesAnInfiniteSessionTheUserStartedAlone() async {
+    // zero seconds left means infinite: never downgraded to the capped hours
+    let runner = RecordingRunner(replies: [("true", nil), ("0", nil)])
     let keeper = AmphetamineKeeper(runner: runner.run, installed: { true }, running: { true })
     keeper.setActive(true)
-    #expect(await waitUntil { runner.calls.count >= 1 })
+    #expect(await waitUntil { runner.calls.count >= 2 })
+    #expect(runner.calls[1].contains("session time remaining"))
     #expect(keeper.status == .foreignSession)
     keeper.setActive(false)
     try? await Task.sleep(nanoseconds: 300_000_000)
-    #expect(runner.calls.count >= 1)
+    #expect(runner.calls.count == 2)
+  }
+
+  @MainActor @Test func aShorterForeignSessionIsReplaced() async {
+    // 30 min left against the default 8 h: ours is at least as long, so the
+    // start replaces it on the spot and jetlink owns the session from then on
+    let runner = RecordingRunner(replies: [
+      ("true", nil), ("1800", nil),
+      ("", nil), ("true", nil),
+    ])
+    let keeper = AmphetamineKeeper(runner: runner.run, installed: { true }, running: { true })
+    keeper.setActive(true)
+    #expect(await waitUntil { runner.calls.count >= 4 })
+    #expect(runner.calls[2].contains("start new session"))
+    #expect(keeper.status == .active)
+  }
+
+  @MainActor @Test func aLongerForeignSessionIsInheritedWhenItEnds() async {
+    // 12 h left against 8 h: stand down, poll it on the tick, and the first
+    // start after it ends takes over
+    let runner = RecordingRunner(replies: [
+      ("true", nil), ("43200", nil),
+      ("true", nil), ("43190", nil),
+      ("false", nil), ("", nil), ("true", nil),
+    ])
+    let clock = ClockBox(Date(timeIntervalSinceReferenceDate: 0))
+    let keeper = AmphetamineKeeper(runner: runner.run, installed: { true }, running: { true },
+                                   clock: { clock.date })
+    keeper.setActive(true)
+    #expect(await waitUntil { runner.calls.count >= 2 })
+    #expect(keeper.status == .foreignSession)
+    clock.date = clock.date.addingTimeInterval(11)
+    keeper.checkBattery()
+    #expect(await waitUntil { runner.calls.count >= 4 })
+    #expect(keeper.status == .foreignSession)
+    clock.date = clock.date.addingTimeInterval(11)
+    keeper.checkBattery()
+    #expect(await waitUntil { runner.calls.count >= 7 })
+    #expect(runner.calls[5].contains("start new session"))
+    #expect(keeper.status == .active)
   }
 
   @MainActor @Test func aFailedStartIsNeverEnded() async {
