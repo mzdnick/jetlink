@@ -111,8 +111,8 @@ struct GeneralSettingsView: View {
       Text("Amphetamine session failed: \(message)")
     case .batteryFloor(let percent):
       Text("The session ended at the battery floor (\(percent)%).")
-    case .expired:
-      Text("The \(settings.effectiveKeepAwakeSessionHours)-hour keep-awake ran out; the Mac may sleep. Restart the server for another.")
+    case .expired(let hours):
+      Text("The \(hours)-hour keep-awake ran out; the Mac may sleep. Restart the server for another.")
     }
   }
 

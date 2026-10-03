@@ -149,7 +149,7 @@ final class AmphetamineKeeper {
     case permissionDenied
     case failed(String)
     case batteryFloor(Int)
-    case expired
+    case expired(Int)
   }
 
   private(set) var status: Status = .idle
@@ -160,6 +160,9 @@ final class AmphetamineKeeper {
   /// The seconds the session had left when last seen alive; a session found
   /// dead with almost none was the 12-hour backstop running out, not a death.
   private var lastKnownRemaining: Int?
+  /// The hours the session was started with, so an expiry can be named with
+  /// the number the user actually ran, not the setting they have now.
+  private var startedHours: Int?
   /// The backstop fired for this serve; nothing restarts it until serving
   /// actually stops. Power-source churn re-calls setActive(true) constantly,
   /// so only a real stop clears this.
@@ -240,16 +243,17 @@ final class AmphetamineKeeper {
       Task { @MainActor [weak self] in
         guard let self else { return }
         self.executing = false
-        self.apply(outcome, floor: floorNow)
+        self.apply(outcome, floor: floorNow, hours: hours)
         self.pump()
       }
     }
   }
 
-  private func apply(_ outcome: Amph.Outcome, floor: Int?) {
+  private func apply(_ outcome: Amph.Outcome, floor: Int?, hours: Int?) {
     switch outcome {
     case .started:
       startedSession = true
+      startedHours = hours
       lastKnownRemaining = nil
       status = .active
       startHealthTimer()
@@ -267,6 +271,7 @@ final class AmphetamineKeeper {
       status = .failed(message)
     case .ended:
       startedSession = false
+      startedHours = nil
       stopHealthTimer()
       status = floor.map(Status.batteryFloor) ?? .idle
     case .endFailed(let message):
@@ -276,19 +281,19 @@ final class AmphetamineKeeper {
       lastKnownRemaining = remaining
       status = .active
     case .gone:
+      let hours = startedHours
+      startedSession = false
+      startedHours = nil
+      stopHealthTimer()
       if let remaining = lastKnownRemaining, remaining <= Amph.expiryWindowSeconds {
         // the 12-hour backstop ran out on purpose: the Mac may sleep, and
         // nothing restarts the session until this serve stops
         expired = true
-        startedSession = false
-        stopHealthTimer()
-        status = .expired
+        status = .expired(hours ?? sessionHours())
       } else {
         // our session died without us — Amphetamine killed, or ended by
         // hand. Drop the claim; pump starts a fresh session, which
         // relaunches Amphetamine if it was quit.
-        startedSession = false
-        stopHealthTimer()
         status = .idle
       }
     }

@@ -186,7 +186,7 @@ private func waitUntil(_ condition: @escaping () -> Bool) async -> Bool {
     #expect(await waitUntil { runner.calls.count >= 5 })
     keeper.checkBattery()
     #expect(await waitUntil { runner.calls.count >= 6 })
-    #expect(keeper.status == .expired)
+    #expect(keeper.status == .expired(8))
     keeper.setActive(true)
     try? await Task.sleep(nanoseconds: 300_000_000)
     #expect(runner.calls.count == 6)
