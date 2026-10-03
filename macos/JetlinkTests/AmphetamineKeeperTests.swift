@@ -129,4 +129,34 @@ private func waitUntil(_ condition: @escaping () -> Bool) async -> Bool {
     #expect(runner.calls.isEmpty)
     #expect(keeper.status == .notInstalled)
   }
+
+  @MainActor @Test func aKilledSessionIsRestartedByTheHealthCheck() async {
+    // start: not active, started, closed-display ok; then the check finds it
+    // gone, and the restart asks the same three questions again
+    let runner = RecordingRunner(replies: [
+      ("false", nil), ("", nil), ("true", nil),
+      ("false", nil),
+      ("false", nil), ("", nil), ("true", nil),
+    ])
+    let keeper = AmphetamineKeeper(runner: runner.run, installed: { true })
+    keeper.setActive(true)
+    #expect(await waitUntil { runner.calls.count == 3 })
+    #expect(keeper.status == .active)
+    keeper.checkBattery()
+    #expect(await waitUntil { runner.calls.count == 7 })
+    #expect(runner.calls[3].contains("session is active"))
+    #expect(runner.calls[5].contains("start new session"))
+    #expect(keeper.status == .active)
+  }
+
+  @MainActor @Test func aLiveSessionPassesTheHealthCheck() async {
+    let runner = RecordingRunner(replies: [("false", nil), ("", nil), ("true", nil), ("true", nil)])
+    let keeper = AmphetamineKeeper(runner: runner.run, installed: { true })
+    keeper.setActive(true)
+    #expect(await waitUntil { runner.calls.count == 3 })
+    keeper.checkBattery()
+    #expect(await waitUntil { runner.calls.count == 4 })
+    #expect(runner.calls[3].contains("session is active"))
+    #expect(keeper.status == .active)
+  }
 }

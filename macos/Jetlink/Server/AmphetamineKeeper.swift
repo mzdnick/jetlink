@@ -24,6 +24,8 @@ private enum Amph {
     case failed(String)
     case ended
     case endFailed(String)
+    case alive
+    case gone
   }
 
   static func performStart(runner: (String) -> (String?, String?), installed: Bool) -> Outcome {
@@ -48,6 +50,16 @@ private enum Amph {
     if let error { return denied(error) ? .denied : .endFailed(error) }
     log.info("ended the Amphetamine session")
     return .ended
+  }
+
+  /// A session we started can vanish without us: Amphetamine killed, or the
+  /// finite duration ran out mid-serve. One look, so the health timer can
+  /// restart what died.
+  static func performVerify(runner: (String) -> (String?, String?), installed: Bool) -> Outcome {
+    guard installed else { return .notInstalled }
+    let (active, error) = script(runner: runner, "tell application id \"\(bundleID)\"\nsession is active\nend tell")
+    if let error { return denied(error) ? .denied : .failed(error) }
+    return active == "true" ? .alive : .gone
   }
 
   static func script(runner: (String) -> (String?, String?), _ source: String) -> (String?, String?) {
@@ -158,19 +170,22 @@ final class AmphetamineKeeper {
     pump()
   }
 
-  /// The floor timer's tick; tests call it directly.
+  /// The health timer's tick; tests call it directly. Only this entry may
+  /// verify a live session — a transition-driven pump that verified would
+  /// loop start → verify → gone → start on a slow Apple event.
   func checkBattery() {
-    pump()
+    pump(true)
   }
 
-  private func pump() {
+  private func pump(_ verify: Bool = false) {
     guard !executing, !blocked else { return }
     let floor = floorEnabled() ? floorPercent() : nil
     let belowFloor = floor.flatMap { percent in batteryLevel().map { $0 < percent } } ?? false
     let endForFloor = startedSession && belowFloor
+    let verifyLive = verify && startedSession && desiredActive && !belowFloor
     let start = desiredActive && !startedSession && !belowFloor
     let end = (!desiredActive && startedSession) || endForFloor
-    guard start || end else {
+    guard start || end || verifyLive else {
       if desiredActive, !startedSession, belowFloor, let floor {
         status = .batteryFloor(floor)
       }
@@ -183,7 +198,9 @@ final class AmphetamineKeeper {
     queue.async { [weak self] in
       let outcome = start
         ? Amph.performStart(runner: runner, installed: installing)
-        : Amph.performEnd(runner: runner)
+        : verifyLive
+          ? Amph.performVerify(runner: runner, installed: installing)
+          : Amph.performEnd(runner: runner)
       Task { @MainActor [weak self] in
         guard let self else { return }
         self.executing = false
@@ -198,7 +215,7 @@ final class AmphetamineKeeper {
     case .started:
       startedSession = true
       status = .active
-      startFloorTimer()
+      startHealthTimer()
     case .foreign:
       blocked = true
       status = .foreignSession
@@ -213,22 +230,31 @@ final class AmphetamineKeeper {
       status = .failed(message)
     case .ended:
       startedSession = false
-      stopFloorTimer()
+      stopHealthTimer()
       status = floor.map(Status.batteryFloor) ?? .idle
     case .endFailed(let message):
       blocked = true
       status = .failed(message)
+    case .alive:
+      status = .active
+    case .gone:
+      // our session died without us — Amphetamine killed, or the finite
+      // duration ran out. Drop the claim; pump starts a fresh session, which
+      // relaunches Amphetamine if it was quit.
+      startedSession = false
+      stopHealthTimer()
+      status = .idle
     }
   }
 
-  private func startFloorTimer() {
+  private func startHealthTimer() {
     guard floorTimer == nil else { return }
     floorTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
       Task { @MainActor [weak self] in self?.checkBattery() }
     }
   }
 
-  private func stopFloorTimer() {
+  private func stopHealthTimer() {
     floorTimer?.invalidate()
     floorTimer = nil
   }
