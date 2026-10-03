@@ -49,7 +49,7 @@ struct GeneralSettingsView: View {
           Toggle("Prevent sleep with the lid closed", isOn: $settings.keepAwakeOnBattery)
             .disabled(!settings.keepAwakeWhileServing)
             .onChange(of: settings.keepAwakeOnBattery) { server.keepAwakeSettingChanged() }
-          Text("While serving, Jetlink starts an Amphetamine session so a closed lid does not sleep the Mac — on battery or plugged in. Needs the free Amphetamine app.")
+          Text("While serving, start an Amphetamine session to prevent sleep with a closed lid. Requires the free Amphetamine app.")
             .font(.callout)
             .foregroundStyle(.secondary)
         }
@@ -57,7 +57,7 @@ struct GeneralSettingsView: View {
           TextField("End the session below (%)", value: $settings.keepAwakeBatteryFloorPercent, format: .number.grouping(.never))
             .disabled(!settings.keepAwakeOnBattery)
             .onChange(of: settings.keepAwakeBatteryFloorPercent) { server.keepAwakeSettingChanged() }
-          Text("Ends the session when the battery gets low, so a closed Mac cannot run itself flat. 0 disables the floor.")
+          Text("Ends the session when the battery gets low. 0 disables.")
             .font(.callout)
             .foregroundStyle(.secondary)
         }
@@ -65,7 +65,7 @@ struct GeneralSettingsView: View {
           TextField("Keep-awake limit (hours)", value: $settings.keepAwakeSessionHours, format: .number.grouping(.never))
             .disabled(!settings.keepAwakeOnBattery)
             .onChange(of: settings.keepAwakeSessionHours) { server.keepAwakeSettingChanged() }
-          Text("One session lasts this long. After it ends, the Mac may sleep until the server restarts.")
+          Text("How long a session lasts. Mac will sleep after session ends.")
             .font(.callout)
             .foregroundStyle(.secondary)
         }
