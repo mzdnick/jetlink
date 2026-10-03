@@ -38,23 +38,38 @@ struct GeneralSettingsView: View {
         VStack(alignment: .leading, spacing: 4) {
           Toggle("Prevent sleep while server is running", isOn: $settings.keepAwakeWhileServing)
             .onChange(of: settings.keepAwakeWhileServing) { server.keepAwakeSettingChanged() }
+          Text("Keeps the Mac awake while the server runs.")
+            .font(.callout)
+            .foregroundStyle(.secondary)
+        }
+        VStack(alignment: .leading, spacing: 4) {
           Toggle("Prevent sleep with the lid closed", isOn: $settings.keepAwakeOnBattery)
             .disabled(!settings.keepAwakeWhileServing)
             .onChange(of: settings.keepAwakeOnBattery) { server.keepAwakeSettingChanged() }
+          Text("While serving, Jetlink starts an Amphetamine session so a closed lid does not sleep the Mac — on battery or plugged in. Needs the free Amphetamine app.")
+            .font(.callout)
+            .foregroundStyle(.secondary)
+        }
+        VStack(alignment: .leading, spacing: 4) {
           TextField("End the session below (%)", value: $settings.keepAwakeBatteryFloorPercent, format: .number.grouping(.never))
             .disabled(!settings.keepAwakeOnBattery)
             .onChange(of: settings.keepAwakeBatteryFloorPercent) { server.keepAwakeSettingChanged() }
+          Text("Ends the session when the battery gets low, so a closed Mac cannot run itself flat. 0 disables the floor.")
+            .font(.callout)
+            .foregroundStyle(.secondary)
+        }
+        VStack(alignment: .leading, spacing: 4) {
           TextField("Keep-awake limit (hours)", value: $settings.keepAwakeSessionHours, format: .number.grouping(.never))
             .disabled(!settings.keepAwakeOnBattery)
             .onChange(of: settings.keepAwakeSessionHours) { server.keepAwakeSettingChanged() }
-          Text("While serving, Jetlink starts an Amphetamine session so a closed lid does not sleep the Mac — on battery or plugged in. Without the free Amphetamine app, a closed lid may still sleep the Mac. The session ends at the battery floor so a closed Mac cannot run itself flat; 0 disables the floor.")
+          Text("One session lasts this long. After it ends, the Mac may sleep until the server restarts.")
             .font(.callout)
             .foregroundStyle(.secondary)
-          if settings.keepAwakeWhileServing && settings.keepAwakeOnBattery && server.amphetamineSupportsLidSleep {
-            amphetamineStatusLine
-              .font(.callout)
-              .foregroundStyle(amphetamineStatusTone)
-          }
+        }
+        if settings.keepAwakeWhileServing && settings.keepAwakeOnBattery && server.amphetamineSupportsLidSleep {
+          amphetamineStatusLine
+            .font(.callout)
+            .foregroundStyle(amphetamineStatusTone)
         }
       }
 
