@@ -52,6 +52,14 @@ struct GeneralSettingsView: View {
           .pickerStyle(.segmented)
           .disabled(!settings.keepAwakeBatteryFloorEnabled || !settings.keepAwakeOnBattery)
           .onChange(of: settings.keepAwakeBatteryFloorPercent) { server.keepAwakeSettingChanged() }
+          Picker("Keep-awake limit", selection: $settings.keepAwakeSessionHours) {
+            ForEach([4, 8, 12, 24], id: \.self) { hours in
+              Text("\(hours) h").tag(hours)
+            }
+          }
+          .pickerStyle(.segmented)
+          .disabled(!settings.keepAwakeOnBattery)
+          .onChange(of: settings.keepAwakeSessionHours) { server.keepAwakeSettingChanged() }
           Text("By default, sleep prevention applies only on power. On battery, Jetlink starts an Amphetamine session so the Mac stays awake with the lid closed. Without Amphetamine, closing the lid may still put the Mac to sleep.")
             .font(.callout)
             .foregroundStyle(.secondary)
@@ -110,7 +118,7 @@ struct GeneralSettingsView: View {
     case .batteryFloor(let percent):
       Text("The session ended at the battery floor (\(percent)%).")
     case .expired:
-      Text("The 12-hour keep-awake ran out; the Mac may sleep. Restart the server for another.")
+      Text("The \(settings.keepAwakeSessionHours)-hour keep-awake ran out; the Mac may sleep. Restart the server for another.")
     }
   }
 

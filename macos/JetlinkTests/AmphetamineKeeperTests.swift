@@ -130,6 +130,14 @@ private func waitUntil(_ condition: @escaping () -> Bool) async -> Bool {
     #expect(keeper.status == .notInstalled)
   }
 
+  @MainActor @Test func theSessionCarriesTheConfiguredHours() async {
+    let runner = RecordingRunner(replies: [("false", nil), ("", nil), ("true", nil)])
+    let keeper = AmphetamineKeeper(runner: runner.run, installed: { true }, running: { true }, sessionHours: { 24 })
+    keeper.setActive(true)
+    #expect(await waitUntil { runner.calls.count >= 3 })
+    #expect(runner.calls[1].contains("start new session with options {duration:24, interval:hours, displaySleepAllowed:false}"))
+  }
+
   @MainActor @Test func aKilledSessionIsRestartedByTheHealthCheck() async {
     // start: not active, started, closed-display ok; then the check finds it
     // gone, and the restart asks the same three questions again

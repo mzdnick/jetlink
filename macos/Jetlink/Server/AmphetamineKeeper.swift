@@ -9,10 +9,10 @@ import os
 private enum Amph {
   static let bundleID = "com.if.Amphetamine"
 
-  /// A crash must not keep the Mac awake forever: the session dies after this
-  /// many hours even if jetlink never ends it. A serve that outlasts it loses
-  /// lid-close protection until the next state change re-arms the keeper.
-  static let sessionHours = 12
+  /// A crash must not keep the Mac awake forever: every session dies on its
+  /// own after this many hours even if jetlink never ends it. The setting
+  /// offers 4/8/12/24 — never unlimited, so the crash backstop always holds.
+  static let defaultSessionHours = 12
 
   /// A session last seen alive with at most this many seconds left and then
   /// found dead ran out on purpose; anything more was a death.
@@ -32,7 +32,7 @@ private enum Amph {
     case gone
   }
 
-  static func performStart(runner: (String) -> (String?, String?), installed: Bool) -> Outcome {
+  static func performStart(runner: (String) -> (String?, String?), installed: Bool, sessionHours: Int) -> Outcome {
     guard installed else { return .notInstalled }
     let (active, _) = script(runner: runner, "tell application id \"\(bundleID)\"\nsession is active\nend tell")
     if active == "true" {
@@ -171,13 +171,15 @@ final class AmphetamineKeeper {
   private let batteryLevel: () -> Int?
   private let floorEnabled: () -> Bool
   private let floorPercent: () -> Int
+  private let sessionHours: () -> Int
 
   init(runner: ((String) -> (String?, String?))? = nil,
        installed: (() -> Bool)? = nil,
        running: (() -> Bool)? = nil,
        batteryLevel: (() -> Int?)? = nil,
        floorEnabled: (() -> Bool)? = nil,
-       floorPercent: (() -> Int)? = nil) {
+       floorPercent: (() -> Int)? = nil,
+       sessionHours: (() -> Int)? = nil) {
     self.runner = runner ?? Amph.osascript
     self.installed = installed ?? {
       let urls = LSCopyApplicationURLsForBundleIdentifier(Amph.bundleID as CFString, nil)?.takeRetainedValue()
@@ -189,6 +191,7 @@ final class AmphetamineKeeper {
     self.batteryLevel = batteryLevel ?? Amph.batteryPercent
     self.floorEnabled = floorEnabled ?? { false }
     self.floorPercent = floorPercent ?? { 20 }
+    self.sessionHours = sessionHours ?? { Amph.defaultSessionHours }
   }
 
   func setActive(_ active: Bool) {
@@ -225,10 +228,11 @@ final class AmphetamineKeeper {
     let runner = runner
     let installing = installed()
     let ampRunning = running()
+    let hours = sessionHours()
     let floorNow = endForFloor ? floor : nil
     queue.async { [weak self] in
       let outcome = start
-        ? Amph.performStart(runner: runner, installed: installing)
+        ? Amph.performStart(runner: runner, installed: installing, sessionHours: hours)
         : verifyLive
           ? Amph.performVerify(runner: runner, installed: installing, running: ampRunning)
           : Amph.performEnd(runner: runner, running: ampRunning)

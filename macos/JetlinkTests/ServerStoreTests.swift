@@ -106,8 +106,17 @@ struct ServerStoreTests {
     #expect(settings.keepAwakeBatteryFloorPercent == 20)
     settings.keepAwakeBatteryFloorEnabled = false
     settings.keepAwakeBatteryFloorPercent = 15
+    settings.keepAwakeSessionHours = 24
     let reread = AppSettings(defaults: defaults)
     #expect(reread.keepAwakeBatteryFloorEnabled == false)
     #expect(reread.keepAwakeBatteryFloorPercent == 15)
+    #expect(reread.keepAwakeSessionHours == 24)
+  }
+
+  @MainActor @Test func sessionHoursDefaultToTwelve() throws {
+    let suite = "io.zoompilot.jetlink.tests.\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    #expect(AppSettings(defaults: defaults).keepAwakeSessionHours == 12)
   }
 }
