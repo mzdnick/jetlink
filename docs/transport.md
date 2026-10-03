@@ -31,6 +31,14 @@ settings):
 - iOS network: the comma is `192.168.60.1` and runs DHCP; the phone gets a
   `192.168.60.x` address with no gateway or DNS, keeps its internet route over
   Wi-Fi, and dials `192.168.60.1:5599`.
+- The same composite can serve any host: `jetlink-root.sh gadget --ncm` builds
+  it on request (an alias of `--ios`), so a Mac can keep the vendor link and get
+  the cable network too — a bench-grade TCP path over the same cable, or ssh to
+  the comma at `192.168.60.1` without Wi-Fi. The vendor interface stays
+  interface 0, and hosts that want no network keep the plain gadget. The
+  fork's Accelerator Link setting does not offer this mode yet; until it does,
+  the composite is switched by hand (run `net` after each bind) and reverts at
+  the next rebuild.
 - Changing the setting rebuilds the gadget (an unplug), so it changes only
   offroad.
 - Comma side: the `jetlink.comma` package. The owner holds the gadget and lends

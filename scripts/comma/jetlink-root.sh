@@ -8,7 +8,9 @@
 #
 #   sudo scripts/comma/jetlink-root.sh gadget            # the gadget for a Jetson or a Mac
 #   sudo scripts/comma/jetlink-root.sh gadget --ios      # the gadget for an iPhone
-#   sudo scripts/comma/jetlink-root.sh net               # after a bind, iOS only: address, DHCP
+#   sudo scripts/comma/jetlink-root.sh gadget --ncm      # the same composite, for any host
+#                                                          that wants the cable network too
+#   sudo scripts/comma/jetlink-root.sh net               # after a bind, composite only: address, DHCP
 #   sudo scripts/comma/jetlink-root.sh check             # what is there now
 #   sudo scripts/comma/jetlink-root.sh teardown
 #   sudo scripts/comma/jetlink-root.sh port hold|off     # the USB-C port held as the device, or let go
@@ -26,7 +28,10 @@
 # stays interface 0, and a CDC-NCM network interface after it, since an iPhone
 # app can only use the network: the phone gets 192.168.60.x by DHCP from the
 # dnsmasq this script starts on the gadget's netdev, and dials the comma at
-# 192.168.60.1:5599.
+# 192.168.60.1:5599. --ncm builds the same composite for any host that wants
+# the cable network alongside the vendor link: a Mac benching over TCP, or ssh
+# to the comma without Wi-Fi. The host keeps both interfaces; the vendor
+# interface stays interface 0 either way.
 #
 # It does not bind the UDC: a FunctionFS gadget cannot attach to a controller
 # until its descriptors are written, and the owner, which opens ep0, writes
@@ -85,7 +90,7 @@ PROC_SYS=${JETLINK_PROC_SYS:-/proc/sys}
 SYSCTL_PREV=${JETLINK_SYSCTL_PREV:-/dev/shm/jetlink-sysctl-prev}
 
 usage() {
-  echo "usage: $0 gadget [--ios] | net | check | teardown | port hold|off | vm apply|restore" >&2
+  echo "usage: $0 gadget [--ios|--ncm] | net | check | teardown | port hold|off | vm apply|restore" >&2
   exit 2
 }
 
@@ -104,7 +109,7 @@ fail() {
   exit 1
 }
 
-# -- the gadget's network, iOS only -------------------------------------------
+# -- the gadget's network, composite only --------------------------------------
 
 net_present() {
   [[ -d "$GADGET/functions/$NET_FN" ]]
@@ -207,7 +212,7 @@ cmd_gadget() {
   local ios=0 udcs other owner bound serial uid gid
   case "${1:-}" in
     "") ;;
-    --ios) ios=1 ;;
+    --ios|--ncm) ios=1 ;;
     *) usage ;;
   esac
   [[ $EUID -eq 0 ]] || fail "jetlink-root.sh gadget must run as root"
@@ -295,10 +300,11 @@ cmd_gadget() {
     ln -s "$GADGET/functions/ffs.$FFS_NAME" "configs/c.1/ffs.$FFS_NAME" ||
     fail "could not link ffs.$FFS_NAME into configs/c.1"
 
-  # The network interface, for an iPhone only. A USB gadget left with one from an
-  # iOS boot loses it here: unlinking it force-unbinds the UDC, which is why the
-  # owner switches only while parked. The 4.9 kernel picks the interface's MAC
-  # addresses itself and refuses them from configfs; DHCP makes that harmless.
+  # The network interface, composite only (--ios or --ncm). A USB gadget left
+  # with one from a composite boot loses it here: unlinking it force-unbinds the
+  # UDC, which is why the owner switches only while parked. The 4.9 kernel picks
+  # the interface's MAC addresses itself and refuses them from configfs; DHCP
+  # makes that harmless.
   if [[ $ios -eq 0 ]]; then
     if net_present; then net_remove; fi
   else
