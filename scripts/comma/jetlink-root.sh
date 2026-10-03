@@ -376,6 +376,20 @@ cmd_teardown() {
   # with endpoints open; lazy-detach unhooks it now and lets the kernel finish.
   umount -l "$FFS_MOUNT" 2>/dev/null || umount "$FFS_MOUNT" 2>/dev/null || true
   rmdir "$FFS_MOUNT" 2>/dev/null || true
+  # A lazily-unmounted functionfs stays alive while any process still holds an
+  # endpoint open, and creating the next ffs function while the old instance is
+  # still pending oopses the 4.9 kernel (observed: usb_put_function_instance
+  # inside function_make, a segfaulting mkdir, and a configfs tree that wedges
+  # until reboot). Wait for the holders to let go before a rebuild runs.
+  i=0
+  while ls -l /proc/[0-9]*/fd/* 2>/dev/null | grep -q "ffs-jetlink"; do
+    i=$((i + 1))
+    if [[ $i -gt 30 ]]; then
+      echo "jetlink: functionfs still held open after 30 s; rebuilding now may oops the kernel" >&2
+      break
+    fi
+    sleep 1
+  done
   status "error: gadget torn down"
   net_status "error: gadget torn down"
   echo "jetlink gadget torn down"
