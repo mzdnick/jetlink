@@ -77,9 +77,11 @@ final class ServerStore: ServerControlling {
     self.isLive = isLive
     self.sleepAssertion = SleepAssertion()
     self.amphetamine = amphetamine ?? AmphetamineKeeper(
-      floorEnabled: { [settings] in settings.keepAwakeBatteryFloorEnabled },
-      floorPercent: { [settings] in settings.effectiveKeepAwakeBatteryFloorPercent },
-      sessionHours: { [settings] in settings.effectiveKeepAwakeSessionHours },
+      floorPercent: { [settings] in
+        let percent = settings.keepAwakeBatteryFloorPercent
+        return percent > 0 ? percent : nil
+      },
+      sessionHours: { [settings] in settings.keepAwakeSessionHours },
       hasBattery: AmphetamineKeeper.hasInternalBattery())
     let (stream, continuation) = AsyncStream<ControlEvent>.makeStream(bufferingPolicy: .unbounded)
     self.modelEvents = stream

@@ -174,18 +174,35 @@ private func waitUntil(_ condition: @escaping () -> Bool) async -> Bool {
     let runner = RecordingRunner(replies: [])
     let battery = BatteryBox(15)
     let keeper = AmphetamineKeeper(runner: runner.run, installed: { true },
-                                  batteryLevel: { battery.percent }, floorEnabled: { true }, floorPercent: { 20 })
+                                  batteryLevel: { battery.percent }, floorPercent: { 20 })
     keeper.setActive(true)
     try? await Task.sleep(nanoseconds: 300_000_000)
     #expect(runner.calls.isEmpty)
     #expect(keeper.status == .batteryFloor(20))
   }
 
+  @MainActor @Test func aZeroFloorNeverEndsOrBlocksTheSession() async {
+    // 0 means off: even a nearly empty battery neither refuses the start nor
+    // ends a running session
+    let runner = RecordingRunner(replies: [
+      ("false", nil), ("", nil), ("true", nil),
+      ("true", nil), ("600", nil),
+    ])
+    let battery = BatteryBox(5)
+    let keeper = AmphetamineKeeper(runner: runner.run, installed: { true }, running: { true },
+                                  batteryLevel: { battery.percent }, floorPercent: { nil })
+    keeper.setActive(true)
+    #expect(await waitUntil { runner.calls.count >= 3 })
+    keeper.checkBattery()
+    #expect(await waitUntil { runner.calls.count >= 5 })
+    #expect(keeper.status == .active)
+  }
+
   @MainActor @Test func theFloorEndsAnActiveSessionAndHoldsItOff() async {
     let runner = RecordingRunner(replies: [("false", nil), ("", nil), ("true", nil), ("", nil)])
     let battery = BatteryBox(90)
     let keeper = AmphetamineKeeper(runner: runner.run, installed: { true }, running: { true },
-                                  batteryLevel: { battery.percent }, floorEnabled: { true }, floorPercent: { 20 })
+                                  batteryLevel: { battery.percent }, floorPercent: { 20 })
     keeper.setActive(true)
     #expect(await waitUntil { runner.calls.count >= 3 })
     #expect(keeper.status == .active)

@@ -41,16 +41,13 @@ struct GeneralSettingsView: View {
           Toggle("Prevent sleep with the lid closed", isOn: $settings.keepAwakeOnBattery)
             .disabled(!settings.keepAwakeWhileServing)
             .onChange(of: settings.keepAwakeOnBattery) { server.keepAwakeSettingChanged() }
-          Toggle("End the session on low battery", isOn: $settings.keepAwakeBatteryFloorEnabled)
-            .disabled(!settings.keepAwakeOnBattery)
-            .onChange(of: settings.keepAwakeBatteryFloorEnabled) { server.keepAwakeSettingChanged() }
           TextField("End the session below (%)", value: $settings.keepAwakeBatteryFloorPercent, format: .number.grouping(.never))
-            .disabled(!settings.keepAwakeBatteryFloorEnabled || !settings.keepAwakeOnBattery)
+            .disabled(!settings.keepAwakeOnBattery)
             .onChange(of: settings.keepAwakeBatteryFloorPercent) { server.keepAwakeSettingChanged() }
           TextField("Keep-awake limit (hours)", value: $settings.keepAwakeSessionHours, format: .number.grouping(.never))
             .disabled(!settings.keepAwakeOnBattery)
             .onChange(of: settings.keepAwakeSessionHours) { server.keepAwakeSettingChanged() }
-          Text("While serving, Jetlink starts an Amphetamine session so a closed lid does not sleep the Mac — on battery or plugged in. Without the free Amphetamine app, a closed lid may still sleep the Mac.")
+          Text("While serving, Jetlink starts an Amphetamine session so a closed lid does not sleep the Mac — on battery or plugged in. Without the free Amphetamine app, a closed lid may still sleep the Mac. The session ends at the battery floor so a closed Mac cannot run itself flat; 0 disables the floor.")
             .font(.callout)
             .foregroundStyle(.secondary)
           if settings.keepAwakeWhileServing && settings.keepAwakeOnBattery && server.amphetamineSupportsLidSleep {

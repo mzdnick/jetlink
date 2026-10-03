@@ -195,8 +195,9 @@ final class AmphetamineKeeper {
   private let installed: () -> Bool
   private let running: () -> Bool
   private let batteryLevel: () -> Int?
-  private let floorEnabled: () -> Bool
-  private let floorPercent: () -> Int
+  /// The battery floor as a percent, or nil when disabled: a Mac never
+  /// reports 0% while awake, so the folded setting reads 0 as off.
+  private let floorPercent: () -> Int?
   private let sessionHours: () -> Int
   private let clock: () -> Date
   /// A lid close cannot threaten a machine without a lid; the internal
@@ -207,8 +208,7 @@ final class AmphetamineKeeper {
        installed: (() -> Bool)? = nil,
        running: (() -> Bool)? = nil,
        batteryLevel: (() -> Int?)? = nil,
-       floorEnabled: (() -> Bool)? = nil,
-       floorPercent: (() -> Int)? = nil,
+       floorPercent: (() -> Int?)? = nil,
        sessionHours: (() -> Int)? = nil,
        clock: (() -> Date)? = nil,
        hasBattery: Bool? = nil) {
@@ -221,8 +221,7 @@ final class AmphetamineKeeper {
       !NSRunningApplication.runningApplications(withBundleIdentifier: Amph.bundleID).isEmpty
     }
     self.batteryLevel = batteryLevel ?? Amph.batteryPercent
-    self.floorEnabled = floorEnabled ?? { false }
-    self.floorPercent = floorPercent ?? { 20 }
+    self.floorPercent = floorPercent ?? { nil }
     self.sessionHours = sessionHours ?? { Amph.defaultSessionHours }
     self.clock = clock ?? { Date() }
     self.hasBattery = hasBattery ?? true
@@ -265,7 +264,7 @@ final class AmphetamineKeeper {
 
   private func pump(_ verify: Bool = false) {
     guard !executing, !blocked else { return }
-    let floor = floorEnabled() ? floorPercent() : nil
+    let floor = floorPercent()
     let belowFloor = floor.flatMap { percent in batteryLevel().map { $0 < percent } } ?? false
     let endForFloor = startedSession && belowFloor
     let verifyLive = verify && startedSession && desiredActive && !belowFloor
@@ -283,7 +282,10 @@ final class AmphetamineKeeper {
     let installing = installed()
     let ampRunning = running()
     let hours = sessionHours()
-    let floorNow = endForFloor ? floor : nil
+    let floorNow: Int? = {
+      if endForFloor, let floor { return floor }
+      return nil
+    }()
     queue.async { [weak self] in
       let outcome = start
         ? Amph.performStart(runner: runner, installed: installing, sessionHours: hours)

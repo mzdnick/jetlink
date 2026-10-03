@@ -46,7 +46,6 @@ final class AppSettings {
     static let startServerOnLaunch = "startServerOnLaunch"
     static let keepAwakeWhileServing = "keepAwakeWhileServing"
     static let keepAwakeOnBattery = "keepAwakeOnBattery"
-    static let keepAwakeBatteryFloorEnabled = "keepAwakeBatteryFloorEnabled"
     static let keepAwakeBatteryFloorPercent = "keepAwakeBatteryFloorPercent"
     static let keepAwakeSessionHours = "keepAwakeSessionHours"
   }
@@ -81,20 +80,17 @@ final class AppSettings {
     didSet { defaults.set(keepAwakeOnBattery, forKey: Key.keepAwakeOnBattery) }
   }
 
-  var keepAwakeBatteryFloorEnabled: Bool {
-    didSet { defaults.set(keepAwakeBatteryFloorEnabled, forKey: Key.keepAwakeBatteryFloorEnabled) }
-  }
-
   // The free-entry boxes are stored raw (a setter cannot re-assign its own
   // property under the @Observable macro) and read clamped, so every reader —
-  // field, keeper, status line — sees the same clamped value.
+  // field, keeper, status line — sees the same clamped value. The floor reads
+  // 0-99: 0 disables it (a Mac never reports 0% while awake), 99 trips at once.
   private var storedKeepAwakeBatteryFloorPercent: Int
   private var storedKeepAwakeSessionHours: Int
 
   var keepAwakeBatteryFloorPercent: Int {
-    get { min(max(storedKeepAwakeBatteryFloorPercent, 1), 99) }
+    get { min(max(storedKeepAwakeBatteryFloorPercent, 0), 99) }
     set {
-      storedKeepAwakeBatteryFloorPercent = min(max(newValue, 1), 99)
+      storedKeepAwakeBatteryFloorPercent = min(max(newValue, 0), 99)
       defaults.set(storedKeepAwakeBatteryFloorPercent, forKey: Key.keepAwakeBatteryFloorPercent)
     }
   }
@@ -106,13 +102,6 @@ final class AppSettings {
       defaults.set(storedKeepAwakeSessionHours, forKey: Key.keepAwakeSessionHours)
     }
   }
-
-  /// The clamped value the boxes show. Bounds: 0% would never trip the floor,
-  /// 100% always would, zero hours would be no session at all, and any
-  /// positive number keeps the crash backstop finite.
-  var effectiveKeepAwakeBatteryFloorPercent: Int { keepAwakeBatteryFloorPercent }
-
-  var effectiveKeepAwakeSessionHours: Int { keepAwakeSessionHours }
 
   init(defaults: UserDefaults = .standard) {
     self.defaults = defaults
@@ -132,8 +121,11 @@ final class AppSettings {
     startServerOnLaunch = defaults.object(forKey: Key.startServerOnLaunch) == nil ? true : defaults.bool(forKey: Key.startServerOnLaunch)
     keepAwakeWhileServing = defaults.object(forKey: Key.keepAwakeWhileServing) == nil ? true : defaults.bool(forKey: Key.keepAwakeWhileServing)
     keepAwakeOnBattery = defaults.object(forKey: Key.keepAwakeOnBattery) == nil ? false : defaults.bool(forKey: Key.keepAwakeOnBattery)
-    keepAwakeBatteryFloorEnabled = defaults.object(forKey: Key.keepAwakeBatteryFloorEnabled) == nil ? true : defaults.bool(forKey: Key.keepAwakeBatteryFloorEnabled)
-    storedKeepAwakeBatteryFloorPercent = defaults.object(forKey: Key.keepAwakeBatteryFloorPercent) == nil ? 20 : defaults.integer(forKey: Key.keepAwakeBatteryFloorPercent)
+    // the separate floor toggle folds into the percent: one who had turned it
+    // off reads as 0, so their "off" survives the migration
+    let storedFloorEnabled = defaults.object(forKey: "keepAwakeBatteryFloorEnabled") == nil ? true : defaults.bool(forKey: "keepAwakeBatteryFloorEnabled")
+    let storedFloorPercent = defaults.object(forKey: Key.keepAwakeBatteryFloorPercent) == nil ? 20 : defaults.integer(forKey: Key.keepAwakeBatteryFloorPercent)
+    storedKeepAwakeBatteryFloorPercent = storedFloorEnabled ? storedFloorPercent : 0
     storedKeepAwakeSessionHours = defaults.object(forKey: Key.keepAwakeSessionHours) == nil ? 8 : defaults.integer(forKey: Key.keepAwakeSessionHours)
   }
 

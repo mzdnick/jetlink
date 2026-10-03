@@ -102,15 +102,18 @@ struct ServerStoreTests {
     let defaults = try #require(UserDefaults(suiteName: suite))
     defer { defaults.removePersistentDomain(forName: suite) }
     let settings = AppSettings(defaults: defaults)
-    #expect(settings.keepAwakeBatteryFloorEnabled == true)
     #expect(settings.keepAwakeBatteryFloorPercent == 20)
-    settings.keepAwakeBatteryFloorEnabled = false
     settings.keepAwakeBatteryFloorPercent = 15
     settings.keepAwakeSessionHours = 24
     let reread = AppSettings(defaults: defaults)
-    #expect(reread.keepAwakeBatteryFloorEnabled == false)
     #expect(reread.keepAwakeBatteryFloorPercent == 15)
     #expect(reread.keepAwakeSessionHours == 24)
+    // 0 disables the floor, and the fold migrates an old explicit "off" to it
+    settings.keepAwakeBatteryFloorPercent = 0
+    #expect(AppSettings(defaults: defaults).keepAwakeBatteryFloorPercent == 0)
+    defaults.set(false, forKey: "keepAwakeBatteryFloorEnabled")
+    defaults.set(33, forKey: "keepAwakeBatteryFloorPercent")
+    #expect(AppSettings(defaults: defaults).keepAwakeBatteryFloorPercent == 0)
   }
 
   @MainActor @Test func sessionHoursDefaultToEight() throws {
@@ -125,19 +128,17 @@ struct ServerStoreTests {
     let defaults = try #require(UserDefaults(suiteName: suite))
     defer { defaults.removePersistentDomain(forName: suite) }
     let settings = AppSettings(defaults: defaults)
+    // 0 is the legal "off": the floor spans 0-99, and negatives read as off
     settings.keepAwakeBatteryFloorPercent = 0
-    // the property itself reads clamped, so the field shows the proper value
-    #expect(settings.keepAwakeBatteryFloorPercent == 1)
-    #expect(settings.effectiveKeepAwakeBatteryFloorPercent == 1)
+    #expect(settings.keepAwakeBatteryFloorPercent == 0)
+    settings.keepAwakeBatteryFloorPercent = -5
+    #expect(settings.keepAwakeBatteryFloorPercent == 0)
     settings.keepAwakeBatteryFloorPercent = 500
     #expect(settings.keepAwakeBatteryFloorPercent == 99)
-    #expect(settings.effectiveKeepAwakeBatteryFloorPercent == 99)
     settings.keepAwakeSessionHours = 0
     #expect(settings.keepAwakeSessionHours == 1)
-    #expect(settings.effectiveKeepAwakeSessionHours == 1)
     settings.keepAwakeSessionHours = 9000
     #expect(settings.keepAwakeSessionHours == 8760)
-    #expect(settings.effectiveKeepAwakeSessionHours == 8760)
     // what lands in storage is the clamped value, so a relaunch reads it back
     #expect(AppSettings(defaults: defaults).keepAwakeBatteryFloorPercent == 99)
     #expect(AppSettings(defaults: defaults).keepAwakeSessionHours == 8760)
