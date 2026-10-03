@@ -22,7 +22,7 @@ private enum Amph {
   static let log = Logger(subsystem: "io.zoompilot.jetlink", category: "amphetamine")
 
   enum Outcome {
-    case started
+    case started(lidSafe: Bool)
     case foreign
     case notInstalled
     case denied
@@ -44,10 +44,11 @@ private enum Amph {
     if let startError { return denied(startError) ? .denied : .failed(startError) }
     log.info("started an Amphetamine session")
     let (closedDisplay, _) = script(runner: runner, "tell application id \"\(bundleID)\"\nclosed display mode enabled\nend tell")
-    if closedDisplay == "false" {
+    let lidSafe = closedDisplay == "true"
+    if !lidSafe {
       log.warning("Amphetamine may sleep with the lid closed: turn off 'Allow System to Sleep When Display is Closed' in its Sessions preferences")
     }
-    return .started
+    return .started(lidSafe: lidSafe)
   }
 
   /// Ending must never relaunch a quit Amphetamine just to hear "nothing to
@@ -144,6 +145,9 @@ final class AmphetamineKeeper {
   enum Status: Equatable {
     case idle
     case active
+    /// A session of ours is up, but Amphetamine's own 'Allow System to Sleep
+    /// When Display is Closed' preference is on, so a lid close may sleep.
+    case maySleepWhenClosed
     case foreignSession
     case notInstalled
     case permissionDenied
@@ -163,6 +167,9 @@ final class AmphetamineKeeper {
   /// The hours the session was started with, so an expiry can be named with
   /// the number the user actually ran, not the setting they have now.
   private var startedHours: Int?
+  /// The running session cannot be trusted to hold through a lid close:
+  /// Amphetamine's closed-display preference is off. Cleared with the session.
+  private var lidUnsafe = false
   /// The backstop fired for this serve; nothing restarts it until serving
   /// actually stops. Power-source churn re-calls setActive(true) constantly,
   /// so only a real stop clears this.
@@ -251,11 +258,12 @@ final class AmphetamineKeeper {
 
   private func apply(_ outcome: Amph.Outcome, floor: Int?, hours: Int?) {
     switch outcome {
-    case .started:
+    case .started(let lidSafe):
       startedSession = true
       startedHours = hours
       lastKnownRemaining = nil
-      status = .active
+      self.lidUnsafe = !lidSafe
+      status = lidSafe ? .active : .maySleepWhenClosed
       startHealthTimer()
     case .foreign:
       blocked = true
@@ -272,6 +280,7 @@ final class AmphetamineKeeper {
     case .ended:
       startedSession = false
       startedHours = nil
+      lidUnsafe = false
       stopHealthTimer()
       status = floor.map(Status.batteryFloor) ?? .idle
     case .endFailed(let message):
@@ -279,11 +288,12 @@ final class AmphetamineKeeper {
       status = .failed(message)
     case .alive(let remaining):
       lastKnownRemaining = remaining
-      status = .active
+      status = lidUnsafe ? .maySleepWhenClosed : .active
     case .gone:
       let hours = startedHours
       startedSession = false
       startedHours = nil
+      lidUnsafe = false
       stopHealthTimer()
       if let remaining = lastKnownRemaining, remaining <= Amph.expiryWindowSeconds {
         // the 12-hour backstop ran out on purpose: the Mac may sleep, and

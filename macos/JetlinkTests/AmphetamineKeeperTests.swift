@@ -169,6 +169,24 @@ private func waitUntil(_ condition: @escaping () -> Bool) async -> Bool {
     #expect(keeper.status == .active)
   }
 
+  @MainActor @Test func aClosedDisplayWarningShowsAndSurvivesTheHealthCheck() async {
+    // start: not active, started, then the closed-display preference reads
+    // off: the session is up, but the lid close may sleep, and the health
+    // check must not wash the warning away
+    let runner = RecordingRunner(replies: [
+      ("false", nil), ("", nil), ("false", nil),
+      ("true", nil), ("600", nil),
+    ])
+    let keeper = AmphetamineKeeper(runner: runner.run, installed: { true }, running: { true })
+    keeper.setActive(true)
+    #expect(await waitUntil { runner.calls.count >= 3 })
+    #expect(keeper.status == .maySleepWhenClosed)
+    keeper.checkBattery()
+    #expect(await waitUntil { runner.calls.count >= 5 })
+    #expect(runner.calls[4].contains("session time remaining"))
+    #expect(keeper.status == .maySleepWhenClosed)
+  }
+
   @MainActor @Test func theTwelveHourBackstopIsNotRecreated() async {
     // start, then the check sees it alive with 45 s left, then gone: that
     // end was the backstop, and nothing may restart it for this serve — not

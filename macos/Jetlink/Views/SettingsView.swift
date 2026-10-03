@@ -97,6 +97,8 @@ struct GeneralSettingsView: View {
       Text("Amphetamine session starts when the server serves on battery.")
     case .active:
       Text("Amphetamine session is keeping the Mac awake.")
+    case .maySleepWhenClosed:
+      Text("Amphetamine may still sleep with the lid closed. In its Sessions settings, turn off 'Allow System to Sleep When Display is Closed'.")
     case .foreignSession:
       Text("An Amphetamine session you started is keeping the Mac awake.")
     case .notInstalled:
@@ -120,7 +122,7 @@ struct GeneralSettingsView: View {
     switch server.amphetamineStatus {
     case .idle, .foreignSession: .secondary
     case .active: .green
-    case .notInstalled, .permissionDenied, .failed, .batteryFloor, .expired: .orange
+    case .maySleepWhenClosed, .notInstalled, .permissionDenied, .failed, .batteryFloor, .expired: .orange
     }
   }
 
