@@ -85,22 +85,34 @@ final class AppSettings {
     didSet { defaults.set(keepAwakeBatteryFloorEnabled, forKey: Key.keepAwakeBatteryFloorEnabled) }
   }
 
+  // The free-entry boxes are stored raw (a setter cannot re-assign its own
+  // property under the @Observable macro) and read clamped, so every reader —
+  // field, keeper, status line — sees the same clamped value.
+  private var storedKeepAwakeBatteryFloorPercent: Int
+  private var storedKeepAwakeSessionHours: Int
+
   var keepAwakeBatteryFloorPercent: Int {
-    // the clamped value is what gets persisted; assigning to self here traps
-    // under the @Observable macro, so the in-memory copy stays as typed
-    didSet { defaults.set(min(max(keepAwakeBatteryFloorPercent, 1), 99), forKey: Key.keepAwakeBatteryFloorPercent) }
+    get { min(max(storedKeepAwakeBatteryFloorPercent, 1), 99) }
+    set {
+      storedKeepAwakeBatteryFloorPercent = min(max(newValue, 1), 99)
+      defaults.set(storedKeepAwakeBatteryFloorPercent, forKey: Key.keepAwakeBatteryFloorPercent)
+    }
   }
 
   var keepAwakeSessionHours: Int {
-    didSet { defaults.set(min(max(keepAwakeSessionHours, 1), 8760), forKey: Key.keepAwakeSessionHours) }
+    get { min(max(storedKeepAwakeSessionHours, 1), 8760) }
+    set {
+      storedKeepAwakeSessionHours = min(max(newValue, 1), 8760)
+      defaults.set(storedKeepAwakeSessionHours, forKey: Key.keepAwakeSessionHours)
+    }
   }
 
-  /// Free-entry boxes need bounds at every reader: 0% would never trip the
-  /// floor, 100% always would, zero hours would be no session at all, and any
+  /// The clamped value the boxes show. Bounds: 0% would never trip the floor,
+  /// 100% always would, zero hours would be no session at all, and any
   /// positive number keeps the crash backstop finite.
-  var effectiveKeepAwakeBatteryFloorPercent: Int { min(max(keepAwakeBatteryFloorPercent, 1), 99) }
+  var effectiveKeepAwakeBatteryFloorPercent: Int { keepAwakeBatteryFloorPercent }
 
-  var effectiveKeepAwakeSessionHours: Int { min(max(keepAwakeSessionHours, 1), 8760) }
+  var effectiveKeepAwakeSessionHours: Int { keepAwakeSessionHours }
 
   init(defaults: UserDefaults = .standard) {
     self.defaults = defaults
@@ -121,8 +133,8 @@ final class AppSettings {
     keepAwakeWhileServing = defaults.object(forKey: Key.keepAwakeWhileServing) == nil ? true : defaults.bool(forKey: Key.keepAwakeWhileServing)
     keepAwakeOnBattery = defaults.object(forKey: Key.keepAwakeOnBattery) == nil ? false : defaults.bool(forKey: Key.keepAwakeOnBattery)
     keepAwakeBatteryFloorEnabled = defaults.object(forKey: Key.keepAwakeBatteryFloorEnabled) == nil ? true : defaults.bool(forKey: Key.keepAwakeBatteryFloorEnabled)
-    keepAwakeBatteryFloorPercent = defaults.object(forKey: Key.keepAwakeBatteryFloorPercent) == nil ? 20 : defaults.integer(forKey: Key.keepAwakeBatteryFloorPercent)
-    keepAwakeSessionHours = defaults.object(forKey: Key.keepAwakeSessionHours) == nil ? 8 : defaults.integer(forKey: Key.keepAwakeSessionHours)
+    storedKeepAwakeBatteryFloorPercent = defaults.object(forKey: Key.keepAwakeBatteryFloorPercent) == nil ? 20 : defaults.integer(forKey: Key.keepAwakeBatteryFloorPercent)
+    storedKeepAwakeSessionHours = defaults.object(forKey: Key.keepAwakeSessionHours) == nil ? 8 : defaults.integer(forKey: Key.keepAwakeSessionHours)
   }
 
   nonisolated static let defaultTCPPort = 5599

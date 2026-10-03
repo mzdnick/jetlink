@@ -126,12 +126,17 @@ struct ServerStoreTests {
     defer { defaults.removePersistentDomain(forName: suite) }
     let settings = AppSettings(defaults: defaults)
     settings.keepAwakeBatteryFloorPercent = 0
+    // the property itself reads clamped, so the field shows the proper value
+    #expect(settings.keepAwakeBatteryFloorPercent == 1)
     #expect(settings.effectiveKeepAwakeBatteryFloorPercent == 1)
     settings.keepAwakeBatteryFloorPercent = 500
+    #expect(settings.keepAwakeBatteryFloorPercent == 99)
     #expect(settings.effectiveKeepAwakeBatteryFloorPercent == 99)
     settings.keepAwakeSessionHours = 0
+    #expect(settings.keepAwakeSessionHours == 1)
     #expect(settings.effectiveKeepAwakeSessionHours == 1)
     settings.keepAwakeSessionHours = 9000
+    #expect(settings.keepAwakeSessionHours == 8760)
     #expect(settings.effectiveKeepAwakeSessionHours == 8760)
     // what lands in storage is the clamped value, so a relaunch reads it back
     #expect(AppSettings(defaults: defaults).keepAwakeBatteryFloorPercent == 99)
