@@ -82,7 +82,7 @@ struct ServerStoreTests {
     settings.transport = .tcp
     settings.tcpPort = Int.random(in: 50_000..<60_000)
     settings.cacheDirectory = cache
-    let store = ServerStore(settings: settings, logs: LogBuffer(), logFile: nil)
+    let store = ServerStore(settings: settings, logs: LogBuffer(), logFile: nil, amphetamine: AmphetamineKeeper(runner: { _ in ("false", nil) }))
     try await store.startIfNeeded()
     #expect(store.runState == .serving)
     #expect(store.info?.port == settings.tcpPort)

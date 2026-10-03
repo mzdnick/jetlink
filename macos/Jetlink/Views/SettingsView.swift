@@ -41,7 +41,7 @@ struct GeneralSettingsView: View {
           Toggle("Also when on battery", isOn: $settings.keepAwakeOnBattery)
             .disabled(!settings.keepAwakeWhileServing)
             .onChange(of: settings.keepAwakeOnBattery) { server.keepAwakeSettingChanged() }
-          Text("By default, sleep prevention applies only on power. Closing the lid may still put the Mac to sleep.")
+          Text("By default, sleep prevention applies only on power. On battery, Jetlink starts an Amphetamine session so the Mac stays awake with the lid closed. Without Amphetamine, closing the lid may still put the Mac to sleep.")
             .font(.callout)
             .foregroundStyle(.secondary)
         }

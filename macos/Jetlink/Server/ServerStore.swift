@@ -54,6 +54,7 @@ final class ServerStore: ServerControlling {
   @ObservationIgnored private let modelEventsContinuation: AsyncStream<ControlEvent>.Continuation
   @ObservationIgnored private let logFile: LogFileWriter?
   @ObservationIgnored private let sleepAssertion: SleepAssertion
+  @ObservationIgnored private let amphetamine: AmphetamineKeeper
   @ObservationIgnored private let isLive: Bool
   @ObservationIgnored private let log = Logger(subsystem: "io.zoompilot.jetlink", category: "server")
   @ObservationIgnored private var embedded: EmbeddedServer?
@@ -63,12 +64,13 @@ final class ServerStore: ServerControlling {
   @ObservationIgnored private var logStream: LogStream?
   @ObservationIgnored private var logTask: Task<Void, Never>?
 
-  init(settings: AppSettings, logs: LogBuffer, logFile: LogFileWriter? = LogFileWriter(), isLive: Bool = true) {
+  init(settings: AppSettings, logs: LogBuffer, logFile: LogFileWriter? = LogFileWriter(), isLive: Bool = true, amphetamine: AmphetamineKeeper = AmphetamineKeeper()) {
     self.settings = settings
     self.logs = logs
     self.logFile = logFile
     self.isLive = isLive
     self.sleepAssertion = SleepAssertion()
+    self.amphetamine = amphetamine
     let (stream, continuation) = AsyncStream<ControlEvent>.makeStream(bufferingPolicy: .unbounded)
     self.modelEvents = stream
     self.modelEventsContinuation = continuation
@@ -258,6 +260,9 @@ final class ServerStore: ServerControlling {
       wanted = false
     }
     sleepAssertion.setActive(wanted)
+    // the battery keep-awake rides an Amphetamine session: only its holder
+    // survives a lid close on this OS (see AmphetamineKeeper)
+    amphetamine.setActive(wanted && !sleepAssertion.isOnACPower)
   }
 
   /// Called by the settings view when a keep-awake setting changes.
