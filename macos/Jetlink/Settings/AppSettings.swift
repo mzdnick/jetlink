@@ -17,8 +17,8 @@ enum BackendChoice: String, CaseIterable, Codable, Sendable {
 
   var title: String {
     switch self {
-    case .auto: "CoreML with Neural Engine"
-    case .coreml: "CoreML (GPU)"
+    case .auto: "CoreML with the Neural Engine"
+    case .coreml: "CoreML on the GPU"
     }
   }
 
