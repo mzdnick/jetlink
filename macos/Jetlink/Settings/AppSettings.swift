@@ -86,12 +86,21 @@ final class AppSettings {
   }
 
   var keepAwakeBatteryFloorPercent: Int {
-    didSet { defaults.set(keepAwakeBatteryFloorPercent, forKey: Key.keepAwakeBatteryFloorPercent) }
+    // the clamped value is what gets persisted; assigning to self here traps
+    // under the @Observable macro, so the in-memory copy stays as typed
+    didSet { defaults.set(min(max(keepAwakeBatteryFloorPercent, 1), 99), forKey: Key.keepAwakeBatteryFloorPercent) }
   }
 
   var keepAwakeSessionHours: Int {
-    didSet { defaults.set(keepAwakeSessionHours, forKey: Key.keepAwakeSessionHours) }
+    didSet { defaults.set(min(max(keepAwakeSessionHours, 1), 8760), forKey: Key.keepAwakeSessionHours) }
   }
+
+  /// Free-entry boxes need bounds at every reader: 0% would never trip the
+  /// floor, 100% always would, zero hours would be no session at all, and any
+  /// positive number keeps the crash backstop finite.
+  var effectiveKeepAwakeBatteryFloorPercent: Int { min(max(keepAwakeBatteryFloorPercent, 1), 99) }
+
+  var effectiveKeepAwakeSessionHours: Int { min(max(keepAwakeSessionHours, 1), 8760) }
 
   init(defaults: UserDefaults = .standard) {
     self.defaults = defaults
@@ -113,7 +122,7 @@ final class AppSettings {
     keepAwakeOnBattery = defaults.object(forKey: Key.keepAwakeOnBattery) == nil ? false : defaults.bool(forKey: Key.keepAwakeOnBattery)
     keepAwakeBatteryFloorEnabled = defaults.object(forKey: Key.keepAwakeBatteryFloorEnabled) == nil ? true : defaults.bool(forKey: Key.keepAwakeBatteryFloorEnabled)
     keepAwakeBatteryFloorPercent = defaults.object(forKey: Key.keepAwakeBatteryFloorPercent) == nil ? 20 : defaults.integer(forKey: Key.keepAwakeBatteryFloorPercent)
-    keepAwakeSessionHours = defaults.object(forKey: Key.keepAwakeSessionHours) == nil ? 12 : defaults.integer(forKey: Key.keepAwakeSessionHours)
+    keepAwakeSessionHours = defaults.object(forKey: Key.keepAwakeSessionHours) == nil ? 8 : defaults.integer(forKey: Key.keepAwakeSessionHours)
   }
 
   nonisolated static let defaultTCPPort = 5599

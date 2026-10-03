@@ -53,7 +53,7 @@ private func waitUntil(_ condition: @escaping () -> Bool) async -> Bool {
     keeper.setActive(true)
     #expect(await waitUntil { runner.calls.count >= 3 })
     #expect(runner.calls[0].contains("session is active"))
-    #expect(runner.calls[1].contains("start new session with options {duration:12, interval:hours, displaySleepAllowed:false}"))
+    #expect(runner.calls[1].contains("start new session with options {duration:8, interval:hours, displaySleepAllowed:false}"))
     #expect(runner.calls[2].contains("closed display mode enabled"))
     #expect(keeper.status == .active)
     keeper.setActive(false)

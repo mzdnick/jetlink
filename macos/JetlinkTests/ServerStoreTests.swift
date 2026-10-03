@@ -113,10 +113,28 @@ struct ServerStoreTests {
     #expect(reread.keepAwakeSessionHours == 24)
   }
 
-  @MainActor @Test func sessionHoursDefaultToTwelve() throws {
+  @MainActor @Test func sessionHoursDefaultToEight() throws {
     let suite = "io.zoompilot.jetlink.tests.\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suite))
     defer { defaults.removePersistentDomain(forName: suite) }
-    #expect(AppSettings(defaults: defaults).keepAwakeSessionHours == 12)
+    #expect(AppSettings(defaults: defaults).keepAwakeSessionHours == 8)
+  }
+
+  @MainActor @Test func freeEntryValuesAreClamped() throws {
+    let suite = "io.zoompilot.jetlink.tests.\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let settings = AppSettings(defaults: defaults)
+    settings.keepAwakeBatteryFloorPercent = 0
+    #expect(settings.effectiveKeepAwakeBatteryFloorPercent == 1)
+    settings.keepAwakeBatteryFloorPercent = 500
+    #expect(settings.effectiveKeepAwakeBatteryFloorPercent == 99)
+    settings.keepAwakeSessionHours = 0
+    #expect(settings.effectiveKeepAwakeSessionHours == 1)
+    settings.keepAwakeSessionHours = 9000
+    #expect(settings.effectiveKeepAwakeSessionHours == 8760)
+    // what lands in storage is the clamped value, so a relaunch reads it back
+    #expect(AppSettings(defaults: defaults).keepAwakeBatteryFloorPercent == 99)
+    #expect(AppSettings(defaults: defaults).keepAwakeSessionHours == 8760)
   }
 }

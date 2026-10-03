@@ -44,22 +44,12 @@ struct GeneralSettingsView: View {
           Toggle("End the session on low battery", isOn: $settings.keepAwakeBatteryFloorEnabled)
             .disabled(!settings.keepAwakeOnBattery)
             .onChange(of: settings.keepAwakeBatteryFloorEnabled) { server.keepAwakeSettingChanged() }
-          Picker("Battery floor", selection: $settings.keepAwakeBatteryFloorPercent) {
-            ForEach([10, 15, 20, 25, 30], id: \.self) { percent in
-              Text("\(percent)%").tag(percent)
-            }
-          }
-          .pickerStyle(.segmented)
-          .disabled(!settings.keepAwakeBatteryFloorEnabled || !settings.keepAwakeOnBattery)
-          .onChange(of: settings.keepAwakeBatteryFloorPercent) { server.keepAwakeSettingChanged() }
-          Picker("Keep-awake limit", selection: $settings.keepAwakeSessionHours) {
-            ForEach([4, 8, 12, 24], id: \.self) { hours in
-              Text("\(hours) h").tag(hours)
-            }
-          }
-          .pickerStyle(.segmented)
-          .disabled(!settings.keepAwakeOnBattery)
-          .onChange(of: settings.keepAwakeSessionHours) { server.keepAwakeSettingChanged() }
+          TextField("End the session below (%)", value: $settings.keepAwakeBatteryFloorPercent, format: .number.grouping(.never))
+            .disabled(!settings.keepAwakeBatteryFloorEnabled || !settings.keepAwakeOnBattery)
+            .onChange(of: settings.keepAwakeBatteryFloorPercent) { server.keepAwakeSettingChanged() }
+          TextField("Keep-awake limit (hours)", value: $settings.keepAwakeSessionHours, format: .number.grouping(.never))
+            .disabled(!settings.keepAwakeOnBattery)
+            .onChange(of: settings.keepAwakeSessionHours) { server.keepAwakeSettingChanged() }
           Text("By default, sleep prevention applies only on power. On battery, Jetlink starts an Amphetamine session so the Mac stays awake with the lid closed. Without Amphetamine, closing the lid may still put the Mac to sleep.")
             .font(.callout)
             .foregroundStyle(.secondary)
@@ -118,7 +108,7 @@ struct GeneralSettingsView: View {
     case .batteryFloor(let percent):
       Text("The session ended at the battery floor (\(percent)%).")
     case .expired:
-      Text("The \(settings.keepAwakeSessionHours)-hour keep-awake ran out; the Mac may sleep. Restart the server for another.")
+      Text("The \(settings.effectiveKeepAwakeSessionHours)-hour keep-awake ran out; the Mac may sleep. Restart the server for another.")
     }
   }
 

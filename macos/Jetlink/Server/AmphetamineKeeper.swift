@@ -10,9 +10,10 @@ private enum Amph {
   static let bundleID = "com.if.Amphetamine"
 
   /// A crash must not keep the Mac awake forever: every session dies on its
-  /// own after this many hours even if jetlink never ends it. The setting
-  /// offers 4/8/12/24 — never unlimited, so the crash backstop always holds.
-  static let defaultSessionHours = 12
+  /// own after this many hours even if jetlink never ends it. The setting is
+  /// free numeric entry (clamped 1-8760 in AppSettings) — never zero, so the
+  /// crash backstop always holds.
+  static let defaultSessionHours = 8
 
   /// A session last seen alive with at most this many seconds left and then
   /// found dead ran out on purpose; anything more was a death.
