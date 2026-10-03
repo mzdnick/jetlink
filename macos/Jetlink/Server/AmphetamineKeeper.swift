@@ -174,6 +174,9 @@ final class AmphetamineKeeper {
   /// actually stops. Power-source churn re-calls setActive(true) constantly,
   /// so only a real stop clears this.
   private var expired = false
+  /// Until this instant an end attempt is on backoff, so a failed end retries
+  /// on the health tick instead of in a tight loop. Cleared by a real end.
+  private var nextEndAttempt: Date?
   private var floorTimer: Timer?
   private let queue = DispatchQueue(label: "io.zoompilot.jetlink.amphetamine", qos: .utility)
   private let runner: (String) -> (String?, String?)
@@ -183,6 +186,7 @@ final class AmphetamineKeeper {
   private let floorEnabled: () -> Bool
   private let floorPercent: () -> Int
   private let sessionHours: () -> Int
+  private let clock: () -> Date
 
   init(runner: ((String) -> (String?, String?))? = nil,
        installed: (() -> Bool)? = nil,
@@ -190,7 +194,8 @@ final class AmphetamineKeeper {
        batteryLevel: (() -> Int?)? = nil,
        floorEnabled: (() -> Bool)? = nil,
        floorPercent: (() -> Int)? = nil,
-       sessionHours: (() -> Int)? = nil) {
+       sessionHours: (() -> Int)? = nil,
+       clock: (() -> Date)? = nil) {
     self.runner = runner ?? Amph.osascript
     self.installed = installed ?? {
       let urls = LSCopyApplicationURLsForBundleIdentifier(Amph.bundleID as CFString, nil)?.takeRetainedValue()
@@ -203,6 +208,7 @@ final class AmphetamineKeeper {
     self.floorEnabled = floorEnabled ?? { false }
     self.floorPercent = floorPercent ?? { 20 }
     self.sessionHours = sessionHours ?? { Amph.defaultSessionHours }
+    self.clock = clock ?? { Date() }
   }
 
   func setActive(_ active: Bool) {
@@ -228,7 +234,8 @@ final class AmphetamineKeeper {
     let endForFloor = startedSession && belowFloor
     let verifyLive = verify && startedSession && desiredActive && !belowFloor
     let start = desiredActive && !startedSession && !belowFloor && !expired
-    let end = (!desiredActive && startedSession) || endForFloor
+    let endReady = nextEndAttempt.map { clock() >= $0 } ?? true
+    let end = endReady && ((!desiredActive && startedSession) || endForFloor)
     guard start || end || verifyLive else {
       if desiredActive, !startedSession, belowFloor, !expired, let floor {
         status = .batteryFloor(floor)
@@ -281,10 +288,13 @@ final class AmphetamineKeeper {
       startedSession = false
       startedHours = nil
       lidUnsafe = false
+      nextEndAttempt = nil
       stopHealthTimer()
       status = floor.map(Status.batteryFloor) ?? .idle
     case .endFailed(let message):
-      blocked = true
+      // the session is still up and the serve still wants it down, so leave
+      // blocked alone: the health tick retries the end after the backoff
+      nextEndAttempt = clock().addingTimeInterval(10)
       status = .failed(message)
     case .alive(let remaining):
       lastKnownRemaining = remaining

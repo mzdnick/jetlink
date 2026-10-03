@@ -84,6 +84,31 @@ private func waitUntil(_ condition: @escaping () -> Bool) async -> Bool {
     #expect(runner.calls.count >= 2)
   }
 
+  @MainActor @Test func aFailedEndRetriesOnTheNextTick() async {
+    // the end fails once: the session is still up, the tick retries it after
+    // the backoff, and nothing spins in between
+    let runner = RecordingRunner(replies: [
+      ("false", nil), ("", nil), ("true", nil),
+      (nil, "osascript exited 1"),
+      ("", nil),
+    ])
+    let clock = ClockBox(Date(timeIntervalSinceReferenceDate: 0))
+    let keeper = AmphetamineKeeper(runner: runner.run, installed: { true }, running: { true },
+                                   clock: { clock.date })
+    keeper.setActive(true)
+    #expect(await waitUntil { runner.calls.count >= 3 })
+    keeper.setActive(false)
+    #expect(await waitUntil { runner.calls.count >= 4 })
+    #expect(keeper.status == .failed("osascript exited 1"))
+    try? await Task.sleep(nanoseconds: 100_000_000)
+    #expect(runner.calls.count == 4)
+    clock.date = clock.date.addingTimeInterval(11)
+    keeper.checkBattery()
+    #expect(await waitUntil { runner.calls.count >= 5 })
+    #expect(runner.calls[4].contains("end session"))
+    #expect(keeper.status == .idle)
+  }
+
   @MainActor @Test func aDeniedStartReadsAsPermission() async {
     let runner = RecordingRunner(replies: [("false", nil), (nil, "execution error: Not authorized to send Apple events. (-1743)")])
     let keeper = AmphetamineKeeper(runner: runner.run, installed: { true }, running: { true })
@@ -252,4 +277,10 @@ private func waitUntil(_ condition: @escaping () -> Bool) async -> Bool {
 final class RunningBox {
   var value: Bool
   init(_ value: Bool) { self.value = value }
+}
+
+/// A mutable clock the tests advance past the end-retry backoff.
+final class ClockBox {
+  var date: Date
+  init(_ date: Date) { self.date = date }
 }
