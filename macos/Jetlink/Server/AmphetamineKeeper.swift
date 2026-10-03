@@ -14,6 +14,10 @@ private enum Amph {
   /// lid-close protection until the next state change re-arms the keeper.
   static let sessionHours = 12
 
+  /// A session last seen alive with at most this many seconds left and then
+  /// found dead ran out on purpose; anything more was a death.
+  static let expiryWindowSeconds = 120
+
   static let log = Logger(subsystem: "io.zoompilot.jetlink", category: "amphetamine")
 
   enum Outcome {
@@ -24,7 +28,7 @@ private enum Amph {
     case failed(String)
     case ended
     case endFailed(String)
-    case alive
+    case alive(Int?)
     case gone
   }
 
@@ -60,13 +64,17 @@ private enum Amph {
 
   /// A session we started can vanish without us: Amphetamine killed, or the
   /// finite duration ran out mid-serve. One look, so the health timer can
-  /// restart what died. A quit app answers without being launched.
+  /// restart what died. A quit app answers without being launched. While a
+  /// session lives, the seconds it has left come along, so a natural end can
+  /// be told from a death.
   static func performVerify(runner: (String) -> (String?, String?), installed: Bool, running: Bool) -> Outcome {
     guard installed else { return .notInstalled }
     guard running else { return .gone }
     let (active, error) = script(runner: runner, "tell application id \"\(bundleID)\"\nsession is active\nend tell")
     if let error { return denied(error) ? .denied : .failed(error) }
-    return active == "true" ? .alive : .gone
+    guard active == "true" else { return .gone }
+    let (remaining, _) = script(runner: runner, "tell application id \"\(bundleID)\"\nsession time remaining\nend tell")
+    return .alive(remaining.flatMap(Int.init))
   }
 
   static func script(runner: (String) -> (String?, String?), _ source: String) -> (String?, String?) {
@@ -140,6 +148,7 @@ final class AmphetamineKeeper {
     case permissionDenied
     case failed(String)
     case batteryFloor(Int)
+    case expired
   }
 
   private(set) var status: Status = .idle
@@ -147,6 +156,13 @@ final class AmphetamineKeeper {
   private var startedSession = false
   private var executing = false
   private var blocked = false
+  /// The seconds the session had left when last seen alive; a session found
+  /// dead with almost none was the 12-hour backstop running out, not a death.
+  private var lastKnownRemaining: Int?
+  /// The backstop fired for this serve; nothing restarts it until serving
+  /// actually stops. Power-source churn re-calls setActive(true) constantly,
+  /// so only a real stop clears this.
+  private var expired = false
   private var floorTimer: Timer?
   private let queue = DispatchQueue(label: "io.zoompilot.jetlink.amphetamine", qos: .utility)
   private let runner: (String) -> (String?, String?)
@@ -179,6 +195,8 @@ final class AmphetamineKeeper {
     desiredActive = active
     // every explicit transition re-arms attempts; nothing retries on its own
     blocked = false
+    // only a real stop ends the serve: it alone grants a fresh 12 hours
+    if !active { expired = false }
     pump()
   }
 
@@ -195,10 +213,10 @@ final class AmphetamineKeeper {
     let belowFloor = floor.flatMap { percent in batteryLevel().map { $0 < percent } } ?? false
     let endForFloor = startedSession && belowFloor
     let verifyLive = verify && startedSession && desiredActive && !belowFloor
-    let start = desiredActive && !startedSession && !belowFloor
+    let start = desiredActive && !startedSession && !belowFloor && !expired
     let end = (!desiredActive && startedSession) || endForFloor
     guard start || end || verifyLive else {
-      if desiredActive, !startedSession, belowFloor, let floor {
+      if desiredActive, !startedSession, belowFloor, !expired, let floor {
         status = .batteryFloor(floor)
       }
       return
@@ -227,6 +245,7 @@ final class AmphetamineKeeper {
     switch outcome {
     case .started:
       startedSession = true
+      lastKnownRemaining = nil
       status = .active
       startHealthTimer()
     case .foreign:
@@ -248,15 +267,25 @@ final class AmphetamineKeeper {
     case .endFailed(let message):
       blocked = true
       status = .failed(message)
-    case .alive:
+    case .alive(let remaining):
+      lastKnownRemaining = remaining
       status = .active
     case .gone:
-      // our session died without us — Amphetamine killed, or the finite
-      // duration ran out. Drop the claim; pump starts a fresh session, which
-      // relaunches Amphetamine if it was quit.
-      startedSession = false
-      stopHealthTimer()
-      status = .idle
+      if let remaining = lastKnownRemaining, remaining <= Amph.expiryWindowSeconds {
+        // the 12-hour backstop ran out on purpose: the Mac may sleep, and
+        // nothing restarts the session until this serve stops
+        expired = true
+        startedSession = false
+        stopHealthTimer()
+        status = .expired
+      } else {
+        // our session died without us — Amphetamine killed, or ended by
+        // hand. Drop the claim; pump starts a fresh session, which
+        // relaunches Amphetamine if it was quit.
+        startedSession = false
+        stopHealthTimer()
+        status = .idle
+      }
     }
   }
 

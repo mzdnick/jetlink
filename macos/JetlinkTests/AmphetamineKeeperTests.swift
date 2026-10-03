@@ -150,13 +150,44 @@ private func waitUntil(_ condition: @escaping () -> Bool) async -> Bool {
   }
 
   @MainActor @Test func aLiveSessionPassesTheHealthCheck() async {
-    let runner = RecordingRunner(replies: [("false", nil), ("", nil), ("true", nil), ("true", nil)])
+    let runner = RecordingRunner(replies: [("false", nil), ("", nil), ("true", nil), ("true", nil), ("43200", nil)])
     let keeper = AmphetamineKeeper(runner: runner.run, installed: { true }, running: { true })
     keeper.setActive(true)
     #expect(await waitUntil { runner.calls.count >= 3 })
     keeper.checkBattery()
-    #expect(await waitUntil { runner.calls.count >= 4 })
+    #expect(await waitUntil { runner.calls.count >= 5 })
     #expect(runner.calls[3].contains("session is active"))
+    #expect(runner.calls[4].contains("session time remaining"))
+    #expect(keeper.status == .active)
+  }
+
+  @MainActor @Test func theTwelveHourBackstopIsNotRecreated() async {
+    // start, then the check sees it alive with 45 s left, then gone: that
+    // end was the backstop, and nothing may restart it for this serve — not
+    // even the power-source churn that keeps calling setActive(true)
+    let runner = RecordingRunner(replies: [
+      ("false", nil), ("", nil), ("true", nil),
+      ("true", nil), ("45", nil),
+      ("false", nil),
+      ("false", nil), ("", nil), ("true", nil),
+    ])
+    let keeper = AmphetamineKeeper(runner: runner.run, installed: { true }, running: { true })
+    keeper.setActive(true)
+    #expect(await waitUntil { runner.calls.count >= 3 })
+    keeper.checkBattery()
+    #expect(await waitUntil { runner.calls.count >= 5 })
+    keeper.checkBattery()
+    #expect(await waitUntil { runner.calls.count >= 6 })
+    #expect(keeper.status == .expired)
+    keeper.setActive(true)
+    try? await Task.sleep(nanoseconds: 300_000_000)
+    #expect(runner.calls.count == 6)
+    keeper.setActive(false)
+    try? await Task.sleep(nanoseconds: 300_000_000)
+    #expect(runner.calls.count == 6)
+    keeper.setActive(true)
+    #expect(await waitUntil { runner.calls.count >= 9 })
+    #expect(runner.calls[7].contains("start new session"))
     #expect(keeper.status == .active)
   }
 

@@ -109,6 +109,8 @@ struct GeneralSettingsView: View {
       Text("Amphetamine session failed: \(message)")
     case .batteryFloor(let percent):
       Text("The session ended at the battery floor (\(percent)%).")
+    case .expired:
+      Text("The 12-hour keep-awake ran out; the Mac may sleep. Restart the server for another.")
     }
   }
 
@@ -116,7 +118,7 @@ struct GeneralSettingsView: View {
     switch server.amphetamineStatus {
     case .idle, .foreignSession: .secondary
     case .active: .green
-    case .notInstalled, .permissionDenied, .failed, .batteryFloor: .orange
+    case .notInstalled, .permissionDenied, .failed, .batteryFloor, .expired: .orange
     }
   }
 
