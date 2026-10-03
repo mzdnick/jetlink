@@ -262,7 +262,11 @@ final class AmphetamineKeeper {
 
   private func startHealthTimer() {
     guard floorTimer == nil else { return }
-    floorTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+    // Amphetamine broadcasts no session events, so the only way to notice a
+    // session that ended — by hand, a kill, or the finite duration — is to
+    // ask. One Apple event per tick on a utility queue is cheap enough for
+    // ten seconds, which bounds how long the status line can lie.
+    floorTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
       Task { @MainActor [weak self] in self?.checkBattery() }
     }
   }
