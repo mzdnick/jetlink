@@ -46,6 +46,9 @@ final class ServerStore: ServerControlling {
   private(set) var startedAt: Date?
   var lastFailure: String?
 
+  /// What the battery keep-awake's Amphetamine session is doing, for Settings.
+  var amphetamineStatus: AmphetamineKeeper.Status { amphetamine.status }
+
   let settings: AppSettings
   let logs: LogBuffer
   /// Every event a `ModelStore` cares about: inventory, catalog, download, import.
@@ -64,13 +67,15 @@ final class ServerStore: ServerControlling {
   @ObservationIgnored private var logStream: LogStream?
   @ObservationIgnored private var logTask: Task<Void, Never>?
 
-  init(settings: AppSettings, logs: LogBuffer, logFile: LogFileWriter? = LogFileWriter(), isLive: Bool = true, amphetamine: AmphetamineKeeper = AmphetamineKeeper()) {
+  init(settings: AppSettings, logs: LogBuffer, logFile: LogFileWriter? = LogFileWriter(), isLive: Bool = true, amphetamine: AmphetamineKeeper? = nil) {
     self.settings = settings
     self.logs = logs
     self.logFile = logFile
     self.isLive = isLive
     self.sleepAssertion = SleepAssertion()
-    self.amphetamine = amphetamine
+    self.amphetamine = amphetamine ?? AmphetamineKeeper(
+      floorEnabled: { [settings] in settings.keepAwakeBatteryFloorEnabled },
+      floorPercent: { [settings] in settings.keepAwakeBatteryFloorPercent })
     let (stream, continuation) = AsyncStream<ControlEvent>.makeStream(bufferingPolicy: .unbounded)
     self.modelEvents = stream
     self.modelEventsContinuation = continuation

@@ -30,6 +30,12 @@ final class RecordingRunner: @unchecked Sendable {
   }
 }
 
+/// A mutable battery level the tests drop to hit the floor.
+final class BatteryBox {
+  var percent: Int
+  init(_ percent: Int) { self.percent = percent }
+}
+
 @MainActor
 private func waitUntil(_ condition: @escaping () -> Bool) async -> Bool {
   for _ in 0..<150 {
@@ -43,45 +49,84 @@ private func waitUntil(_ condition: @escaping () -> Bool) async -> Bool {
 
   @MainActor @Test func startsASessionAndEndsOnlyWhatItStarted() async {
     let runner = RecordingRunner(replies: [("false", nil), ("", nil), ("true", nil), ("", nil)])
-    let keeper = AmphetamineKeeper(runner: runner.run)
+    let keeper = AmphetamineKeeper(runner: runner.run, installed: { true })
     keeper.setActive(true)
     #expect(await waitUntil { runner.calls.count == 3 })
     #expect(runner.calls[0].contains("session is active"))
-    #expect(runner.calls[1].contains("start new session with options {duration:0, interval:0, displaySleepAllowed:false}"))
+    #expect(runner.calls[1].contains("start new session with options {duration:12, interval:hours, displaySleepAllowed:false}"))
     #expect(runner.calls[2].contains("closed display mode enabled"))
+    #expect(keeper.status == .active)
     keeper.setActive(false)
     #expect(await waitUntil { runner.calls.count == 4 })
     #expect(runner.calls[3].contains("end session"))
+    #expect(keeper.status == .idle)
   }
 
   @MainActor @Test func leavesASessionTheUserStartedAlone() async {
     let runner = RecordingRunner(replies: [("true", nil)])
-    let keeper = AmphetamineKeeper(runner: runner.run)
+    let keeper = AmphetamineKeeper(runner: runner.run, installed: { true })
     keeper.setActive(true)
     #expect(await waitUntil { runner.calls.count == 1 })
+    #expect(keeper.status == .foreignSession)
     keeper.setActive(false)
     try? await Task.sleep(nanoseconds: 300_000_000)
     #expect(runner.calls.count == 1)
   }
 
   @MainActor @Test func aFailedStartIsNeverEnded() async {
-    let runner = RecordingRunner(replies: [("false", nil), (nil, "not authorized")])
-    let keeper = AmphetamineKeeper(runner: runner.run)
+    let runner = RecordingRunner(replies: [("false", nil), (nil, "osascript exited 1")])
+    let keeper = AmphetamineKeeper(runner: runner.run, installed: { true })
     keeper.setActive(true)
     #expect(await waitUntil { runner.calls.count == 2 })
+    #expect(keeper.status == .failed("osascript exited 1"))
     keeper.setActive(false)
     try? await Task.sleep(nanoseconds: 300_000_000)
     #expect(runner.calls.count == 2)
   }
 
-  @MainActor @Test func startingAgainAfterAFailureTriesOnceMore() async {
-    let runner = RecordingRunner(replies: [("false", nil), (nil, "not authorized"), ("false", nil), ("", nil), ("true", nil)])
-    let keeper = AmphetamineKeeper(runner: runner.run)
+  @MainActor @Test func aDeniedStartReadsAsPermission() async {
+    let runner = RecordingRunner(replies: [("false", nil), (nil, "execution error: Not authorized to send Apple events. (-1743)")])
+    let keeper = AmphetamineKeeper(runner: runner.run, installed: { true })
     keeper.setActive(true)
     #expect(await waitUntil { runner.calls.count == 2 })
-    keeper.setActive(false)
+    #expect(keeper.status == .permissionDenied)
+  }
+
+  @MainActor @Test func belowTheFloorAStartIsRefused() async {
+    let runner = RecordingRunner(replies: [])
+    let battery = BatteryBox(15)
+    let keeper = AmphetamineKeeper(runner: runner.run, installed: { true },
+                                  batteryLevel: { battery.percent }, floorEnabled: { true }, floorPercent: { 20 })
     keeper.setActive(true)
-    #expect(await waitUntil { runner.calls.count == 5 })
-    #expect(runner.calls[3].contains("start new session"))
+    try? await Task.sleep(nanoseconds: 300_000_000)
+    #expect(runner.calls.isEmpty)
+    #expect(keeper.status == .batteryFloor(20))
+  }
+
+  @MainActor @Test func theFloorEndsAnActiveSessionAndHoldsItOff() async {
+    let runner = RecordingRunner(replies: [("false", nil), ("", nil), ("true", nil), ("", nil)])
+    let battery = BatteryBox(90)
+    let keeper = AmphetamineKeeper(runner: runner.run, installed: { true },
+                                  batteryLevel: { battery.percent }, floorEnabled: { true }, floorPercent: { 20 })
+    keeper.setActive(true)
+    #expect(await waitUntil { runner.calls.count == 3 })
+    #expect(keeper.status == .active)
+    battery.percent = 15
+    keeper.checkBattery()
+    #expect(await waitUntil { runner.calls.count == 4 })
+    #expect(runner.calls[3].contains("end session"))
+    #expect(keeper.status == .batteryFloor(20))
+    keeper.setActive(true)
+    try? await Task.sleep(nanoseconds: 300_000_000)
+    #expect(runner.calls.count == 4)
+  }
+
+  @MainActor @Test func aMissingInstallIsReported() async {
+    let runner = RecordingRunner(replies: [])
+    let keeper = AmphetamineKeeper(runner: runner.run, installed: { false })
+    keeper.setActive(true)
+    try? await Task.sleep(nanoseconds: 300_000_000)
+    #expect(runner.calls.isEmpty)
+    #expect(keeper.status == .notInstalled)
   }
 }

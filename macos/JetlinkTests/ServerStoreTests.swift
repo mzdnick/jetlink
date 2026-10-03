@@ -96,4 +96,18 @@ struct ServerStoreTests {
     await store.stopAndWait()
     #expect(store.runState == .stopped)
   }
+
+  @MainActor @Test func batteryFloorSettingsRoundTrip() throws {
+    let suite = "io.zoompilot.jetlink.tests.\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let settings = AppSettings(defaults: defaults)
+    #expect(settings.keepAwakeBatteryFloorEnabled == true)
+    #expect(settings.keepAwakeBatteryFloorPercent == 20)
+    settings.keepAwakeBatteryFloorEnabled = false
+    settings.keepAwakeBatteryFloorPercent = 15
+    let reread = AppSettings(defaults: defaults)
+    #expect(reread.keepAwakeBatteryFloorEnabled == false)
+    #expect(reread.keepAwakeBatteryFloorPercent == 15)
+  }
 }

@@ -46,6 +46,8 @@ final class AppSettings {
     static let startServerOnLaunch = "startServerOnLaunch"
     static let keepAwakeWhileServing = "keepAwakeWhileServing"
     static let keepAwakeOnBattery = "keepAwakeOnBattery"
+    static let keepAwakeBatteryFloorEnabled = "keepAwakeBatteryFloorEnabled"
+    static let keepAwakeBatteryFloorPercent = "keepAwakeBatteryFloorPercent"
   }
 
   @ObservationIgnored private let defaults: UserDefaults
@@ -78,6 +80,14 @@ final class AppSettings {
     didSet { defaults.set(keepAwakeOnBattery, forKey: Key.keepAwakeOnBattery) }
   }
 
+  var keepAwakeBatteryFloorEnabled: Bool {
+    didSet { defaults.set(keepAwakeBatteryFloorEnabled, forKey: Key.keepAwakeBatteryFloorEnabled) }
+  }
+
+  var keepAwakeBatteryFloorPercent: Int {
+    didSet { defaults.set(keepAwakeBatteryFloorPercent, forKey: Key.keepAwakeBatteryFloorPercent) }
+  }
+
   init(defaults: UserDefaults = .standard) {
     self.defaults = defaults
     // A stored "tinygrad" (the removed Python backend) or "ane" (an older name
@@ -96,6 +106,8 @@ final class AppSettings {
     startServerOnLaunch = defaults.object(forKey: Key.startServerOnLaunch) == nil ? true : defaults.bool(forKey: Key.startServerOnLaunch)
     keepAwakeWhileServing = defaults.object(forKey: Key.keepAwakeWhileServing) == nil ? true : defaults.bool(forKey: Key.keepAwakeWhileServing)
     keepAwakeOnBattery = defaults.object(forKey: Key.keepAwakeOnBattery) == nil ? false : defaults.bool(forKey: Key.keepAwakeOnBattery)
+    keepAwakeBatteryFloorEnabled = defaults.object(forKey: Key.keepAwakeBatteryFloorEnabled) == nil ? true : defaults.bool(forKey: Key.keepAwakeBatteryFloorEnabled)
+    keepAwakeBatteryFloorPercent = defaults.object(forKey: Key.keepAwakeBatteryFloorPercent) == nil ? 20 : defaults.integer(forKey: Key.keepAwakeBatteryFloorPercent)
   }
 
   nonisolated static let defaultTCPPort = 5599

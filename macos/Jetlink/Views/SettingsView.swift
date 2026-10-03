@@ -41,9 +41,25 @@ struct GeneralSettingsView: View {
           Toggle("Also when on battery", isOn: $settings.keepAwakeOnBattery)
             .disabled(!settings.keepAwakeWhileServing)
             .onChange(of: settings.keepAwakeOnBattery) { server.keepAwakeSettingChanged() }
+          Toggle("End the session on low battery", isOn: $settings.keepAwakeBatteryFloorEnabled)
+            .disabled(!settings.keepAwakeOnBattery)
+            .onChange(of: settings.keepAwakeBatteryFloorEnabled) { server.keepAwakeSettingChanged() }
+          Picker("Battery floor", selection: $settings.keepAwakeBatteryFloorPercent) {
+            ForEach([10, 15, 20, 25, 30], id: \.self) { percent in
+              Text("\(percent)%").tag(percent)
+            }
+          }
+          .pickerStyle(.segmented)
+          .disabled(!settings.keepAwakeBatteryFloorEnabled || !settings.keepAwakeOnBattery)
+          .onChange(of: settings.keepAwakeBatteryFloorPercent) { server.keepAwakeSettingChanged() }
           Text("By default, sleep prevention applies only on power. On battery, Jetlink starts an Amphetamine session so the Mac stays awake with the lid closed. Without Amphetamine, closing the lid may still put the Mac to sleep.")
             .font(.callout)
             .foregroundStyle(.secondary)
+          if settings.keepAwakeWhileServing && settings.keepAwakeOnBattery {
+            amphetamineStatusLine
+              .font(.callout)
+              .foregroundStyle(amphetamineStatusTone)
+          }
         }
       }
 
@@ -75,6 +91,33 @@ struct GeneralSettingsView: View {
   private var needsRestart: Bool {
     guard server.runState == .serving, let running = server.info?.cache else { return false }
     return running != settings.cacheDirectory.path(percentEncoded: false)
+  }
+
+  @ViewBuilder private var amphetamineStatusLine: some View {
+    switch server.amphetamineStatus {
+    case .idle:
+      Text("Amphetamine session starts when the server serves on battery.")
+    case .active:
+      Text("Amphetamine session is keeping the Mac awake.")
+    case .foreignSession:
+      Text("An Amphetamine session you started is keeping the Mac awake.")
+    case .notInstalled:
+      Text("Amphetamine is not installed. Get it from the App Store to keep the Mac awake with the lid closed.")
+    case .permissionDenied:
+      Text("Jetlink may not control Amphetamine. Allow it in System Settings > Privacy & Security > Automation.")
+    case .failed(let message):
+      Text("Amphetamine session failed: \(message)")
+    case .batteryFloor(let percent):
+      Text("The session ended at the battery floor (\(percent)%).")
+    }
+  }
+
+  private var amphetamineStatusTone: Color {
+    switch server.amphetamineStatus {
+    case .idle, .foreignSession: .secondary
+    case .active: .green
+    case .notInstalled, .permissionDenied, .failed, .batteryFloor: .orange
+    }
   }
 
   private func chooseCacheDirectory() {
