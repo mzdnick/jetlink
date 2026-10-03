@@ -45,7 +45,13 @@ private enum Amph {
     return .started
   }
 
-  static func performEnd(runner: (String) -> (String?, String?)) -> Outcome {
+  /// Ending must never relaunch a quit Amphetamine just to hear "nothing to
+  /// end", so the caller says whether the app is running at all.
+  static func performEnd(runner: (String) -> (String?, String?), running: Bool) -> Outcome {
+    guard running else {
+      log.info("Amphetamine is not running; the session went with it")
+      return .ended
+    }
     let (_, error) = script(runner: runner, "tell application id \"\(bundleID)\"\nend session\nend tell")
     if let error { return denied(error) ? .denied : .endFailed(error) }
     log.info("ended the Amphetamine session")
@@ -54,9 +60,10 @@ private enum Amph {
 
   /// A session we started can vanish without us: Amphetamine killed, or the
   /// finite duration ran out mid-serve. One look, so the health timer can
-  /// restart what died.
-  static func performVerify(runner: (String) -> (String?, String?), installed: Bool) -> Outcome {
+  /// restart what died. A quit app answers without being launched.
+  static func performVerify(runner: (String) -> (String?, String?), installed: Bool, running: Bool) -> Outcome {
     guard installed else { return .notInstalled }
+    guard running else { return .gone }
     let (active, error) = script(runner: runner, "tell application id \"\(bundleID)\"\nsession is active\nend tell")
     if let error { return denied(error) ? .denied : .failed(error) }
     return active == "true" ? .alive : .gone
@@ -144,12 +151,14 @@ final class AmphetamineKeeper {
   private let queue = DispatchQueue(label: "io.zoompilot.jetlink.amphetamine", qos: .utility)
   private let runner: (String) -> (String?, String?)
   private let installed: () -> Bool
+  private let running: () -> Bool
   private let batteryLevel: () -> Int?
   private let floorEnabled: () -> Bool
   private let floorPercent: () -> Int
 
   init(runner: ((String) -> (String?, String?))? = nil,
        installed: (() -> Bool)? = nil,
+       running: (() -> Bool)? = nil,
        batteryLevel: (() -> Int?)? = nil,
        floorEnabled: (() -> Bool)? = nil,
        floorPercent: (() -> Int)? = nil) {
@@ -157,6 +166,9 @@ final class AmphetamineKeeper {
     self.installed = installed ?? {
       let urls = LSCopyApplicationURLsForBundleIdentifier(Amph.bundleID as CFString, nil)?.takeRetainedValue()
       return (urls as? [URL])?.isEmpty == false
+    }
+    self.running = running ?? {
+      !NSRunningApplication.runningApplications(withBundleIdentifier: Amph.bundleID).isEmpty
     }
     self.batteryLevel = batteryLevel ?? Amph.batteryPercent
     self.floorEnabled = floorEnabled ?? { false }
@@ -194,13 +206,14 @@ final class AmphetamineKeeper {
     executing = true
     let runner = runner
     let installing = installed()
+    let ampRunning = running()
     let floorNow = endForFloor ? floor : nil
     queue.async { [weak self] in
       let outcome = start
         ? Amph.performStart(runner: runner, installed: installing)
         : verifyLive
-          ? Amph.performVerify(runner: runner, installed: installing)
-          : Amph.performEnd(runner: runner)
+          ? Amph.performVerify(runner: runner, installed: installing, running: ampRunning)
+          : Amph.performEnd(runner: runner, running: ampRunning)
       Task { @MainActor [weak self] in
         guard let self else { return }
         self.executing = false
@@ -249,7 +262,7 @@ final class AmphetamineKeeper {
 
   private func startHealthTimer() {
     guard floorTimer == nil else { return }
-    floorTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+    floorTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
       Task { @MainActor [weak self] in self?.checkBattery() }
     }
   }
