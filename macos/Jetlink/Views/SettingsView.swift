@@ -38,7 +38,7 @@ struct GeneralSettingsView: View {
         VStack(alignment: .leading, spacing: 4) {
           Toggle("Prevent sleep while server is running", isOn: $settings.keepAwakeWhileServing)
             .onChange(of: settings.keepAwakeWhileServing) { server.keepAwakeSettingChanged() }
-          Toggle("Also when on battery", isOn: $settings.keepAwakeOnBattery)
+          Toggle("Prevent sleep on battery", isOn: $settings.keepAwakeOnBattery)
             .disabled(!settings.keepAwakeWhileServing)
             .onChange(of: settings.keepAwakeOnBattery) { server.keepAwakeSettingChanged() }
           Toggle("End the session on low battery", isOn: $settings.keepAwakeBatteryFloorEnabled)
@@ -100,7 +100,11 @@ struct GeneralSettingsView: View {
     case .foreignSession:
       Text("An Amphetamine session you started is keeping the Mac awake.")
     case .notInstalled:
-      Text("Amphetamine is not installed. Get it from the App Store to keep the Mac awake with the lid closed.")
+      VStack(alignment: .leading, spacing: 2) {
+        Text("Amphetamine is not installed. Get it from the App Store to keep the Mac awake with the lid closed.")
+        Link("Open Amphetamine in the App Store",
+             destination: URL(string: "macappstore://apps.apple.com/us/app/amphetamine/id937984704?mt=12")!)
+      }
     case .permissionDenied:
       Text("Jetlink may not control Amphetamine. Allow it in System Settings > Privacy & Security > Automation.")
     case .failed(let message):
