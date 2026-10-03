@@ -199,6 +199,9 @@ final class AmphetamineKeeper {
   private let floorPercent: () -> Int
   private let sessionHours: () -> Int
   private let clock: () -> Date
+  /// A lid close cannot threaten a machine without a lid; the internal
+  /// battery is the marker. Tests default to true to stay hardware-blind.
+  private let hasBattery: Bool
 
   init(runner: ((String) -> (String?, String?))? = nil,
        installed: (() -> Bool)? = nil,
@@ -207,7 +210,8 @@ final class AmphetamineKeeper {
        floorEnabled: (() -> Bool)? = nil,
        floorPercent: (() -> Int)? = nil,
        sessionHours: (() -> Int)? = nil,
-       clock: (() -> Date)? = nil) {
+       clock: (() -> Date)? = nil,
+       hasBattery: Bool? = nil) {
     self.runner = runner ?? Amph.osascript
     self.installed = installed ?? {
       let urls = LSCopyApplicationURLsForBundleIdentifier(Amph.bundleID as CFString, nil)?.takeRetainedValue()
@@ -221,6 +225,26 @@ final class AmphetamineKeeper {
     self.floorPercent = floorPercent ?? { 20 }
     self.sessionHours = sessionHours ?? { Amph.defaultSessionHours }
     self.clock = clock ?? { Date() }
+    self.hasBattery = hasBattery ?? true
+  }
+
+  /// Whether the lid-close protection can apply on this machine at all.
+  var supportsLidSleep: Bool { hasBattery }
+
+  /// A lid close only threatens machines with a lid, and the internal battery
+  /// is the marker: desktops list no power source of this type. The TYPE reads
+  /// "InternalBattery" while the transport reads "Internal" (probed
+  /// 2026-10-03), so the match is on the type key.
+  static func hasInternalBattery() -> Bool {
+    guard let snapshot = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
+          let list = IOPSCopyPowerSourcesList(snapshot)?.takeRetainedValue() as? [CFTypeRef] else { return false }
+    for source in list {
+      if let description = IOPSGetPowerSourceDescription(snapshot, source)?.takeUnretainedValue() as? [String: Any],
+         description[kIOPSTypeKey as String] as? String == kIOPSInternalBatteryType {
+        return true
+      }
+    }
+    return false
   }
 
   func setActive(_ active: Bool) {
@@ -246,7 +270,7 @@ final class AmphetamineKeeper {
     let endForFloor = startedSession && belowFloor
     let verifyLive = verify && startedSession && desiredActive && !belowFloor
     let ready = nextAttempt.map { clock() >= $0 } ?? true
-    let start = ready && desiredActive && !startedSession && !belowFloor && !expired
+    let start = ready && hasBattery && desiredActive && !startedSession && !belowFloor && !expired
     let end = ready && ((!desiredActive && startedSession) || endForFloor)
     guard start || end || verifyLive else {
       if desiredActive, !startedSession, belowFloor, !expired, let floor {

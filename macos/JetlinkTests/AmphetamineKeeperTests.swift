@@ -158,6 +158,18 @@ private func waitUntil(_ condition: @escaping () -> Bool) async -> Bool {
     #expect(keeper.status == .permissionDenied)
   }
 
+  @MainActor @Test func aMachineWithoutABatteryNeverStarts() async {
+    // desktops have no lid to close: the gate refuses before Amphetamine is
+    // ever asked, whatever the toggle says
+    let runner = RecordingRunner(replies: [])
+    let keeper = AmphetamineKeeper(runner: runner.run, installed: { true }, running: { true },
+                                   hasBattery: false)
+    keeper.setActive(true)
+    try? await Task.sleep(nanoseconds: 300_000_000)
+    #expect(runner.calls.isEmpty)
+    #expect(keeper.status == .idle)
+  }
+
   @MainActor @Test func belowTheFloorAStartIsRefused() async {
     let runner = RecordingRunner(replies: [])
     let battery = BatteryBox(15)

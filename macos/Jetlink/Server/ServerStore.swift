@@ -49,6 +49,9 @@ final class ServerStore: ServerControlling {
   /// What the battery keep-awake's Amphetamine session is doing, for Settings.
   var amphetamineStatus: AmphetamineKeeper.Status { amphetamine.status }
 
+  /// Whether lid-close protection applies on this machine at all.
+  var amphetamineSupportsLidSleep: Bool { amphetamine.supportsLidSleep }
+
   let settings: AppSettings
   let logs: LogBuffer
   /// Every event a `ModelStore` cares about: inventory, catalog, download, import.
@@ -76,7 +79,8 @@ final class ServerStore: ServerControlling {
     self.amphetamine = amphetamine ?? AmphetamineKeeper(
       floorEnabled: { [settings] in settings.keepAwakeBatteryFloorEnabled },
       floorPercent: { [settings] in settings.effectiveKeepAwakeBatteryFloorPercent },
-      sessionHours: { [settings] in settings.effectiveKeepAwakeSessionHours })
+      sessionHours: { [settings] in settings.effectiveKeepAwakeSessionHours },
+      hasBattery: AmphetamineKeeper.hasInternalBattery())
     let (stream, continuation) = AsyncStream<ControlEvent>.makeStream(bufferingPolicy: .unbounded)
     self.modelEvents = stream
     self.modelEventsContinuation = continuation
@@ -267,8 +271,11 @@ final class ServerStore: ServerControlling {
     }
     sleepAssertion.setActive(wanted)
     // the battery keep-awake rides an Amphetamine session: only its holder
-    // survives a lid close on this OS (see AmphetamineKeeper)
-    amphetamine.setActive(wanted && !sleepAssertion.isOnACPower)
+    // survives a lid close on this OS (see AmphetamineKeeper). It runs on any
+    // power source — a bank or a car outlet reads as AC and sleeps the same —
+    // so the gate is the toggle plus the machine having a battery, which the
+    // keeper checks itself.
+    amphetamine.setActive(wanted && settings.keepAwakeOnBattery)
   }
 
   /// Called by the settings view when a keep-awake setting changes.

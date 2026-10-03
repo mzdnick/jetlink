@@ -38,7 +38,7 @@ struct GeneralSettingsView: View {
         VStack(alignment: .leading, spacing: 4) {
           Toggle("Prevent sleep while server is running", isOn: $settings.keepAwakeWhileServing)
             .onChange(of: settings.keepAwakeWhileServing) { server.keepAwakeSettingChanged() }
-          Toggle("Prevent sleep on battery", isOn: $settings.keepAwakeOnBattery)
+          Toggle("Prevent sleep with the lid closed", isOn: $settings.keepAwakeOnBattery)
             .disabled(!settings.keepAwakeWhileServing)
             .onChange(of: settings.keepAwakeOnBattery) { server.keepAwakeSettingChanged() }
           Toggle("End the session on low battery", isOn: $settings.keepAwakeBatteryFloorEnabled)
@@ -50,10 +50,10 @@ struct GeneralSettingsView: View {
           TextField("Keep-awake limit (hours)", value: $settings.keepAwakeSessionHours, format: .number.grouping(.never))
             .disabled(!settings.keepAwakeOnBattery)
             .onChange(of: settings.keepAwakeSessionHours) { server.keepAwakeSettingChanged() }
-          Text("By default, sleep prevention applies only on power. On battery, Jetlink starts an Amphetamine session so the Mac stays awake with the lid closed. Without Amphetamine, closing the lid may still put the Mac to sleep.")
+          Text("While serving, Jetlink starts an Amphetamine session so a closed lid does not sleep the Mac — on battery or plugged in. Without the free Amphetamine app, a closed lid may still sleep the Mac.")
             .font(.callout)
             .foregroundStyle(.secondary)
-          if settings.keepAwakeWhileServing && settings.keepAwakeOnBattery {
+          if settings.keepAwakeWhileServing && settings.keepAwakeOnBattery && server.amphetamineSupportsLidSleep {
             amphetamineStatusLine
               .font(.callout)
               .foregroundStyle(amphetamineStatusTone)
@@ -94,7 +94,7 @@ struct GeneralSettingsView: View {
   @ViewBuilder private var amphetamineStatusLine: some View {
     switch server.amphetamineStatus {
     case .idle:
-      Text("Amphetamine session starts when the server serves on battery.")
+      Text("The Amphetamine session starts when the server is serving.")
     case .active:
       Text("Amphetamine session is keeping the Mac awake.")
     case .maySleepWhenClosed:
