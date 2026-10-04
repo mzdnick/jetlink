@@ -35,45 +35,20 @@ struct GeneralSettingsView: View {
             Button("Open Login Items") { loginItem.openSystemSettings() }
           }
         }
-      }
-
-      Section("Sleep") {
         VStack(alignment: .leading, spacing: 4) {
-          Toggle("Prevent sleep while server is running", isOn: $settings.keepAwakeWhileServing)
-            .onChange(of: settings.keepAwakeWhileServing) { server.keepAwakeSettingChanged() }
-          Text("Keeps the Mac awake while the server runs.")
-            .font(.callout)
-            .foregroundStyle(.secondary)
-        }
-        VStack(alignment: .leading, spacing: 4) {
-          Toggle("Prevent sleep with the lid closed", isOn: $settings.keepAwakeOnBattery)
+          Toggle("Keep the Mac awake while serving", isOn: $settings.keepAwakeWhileServing)
+          Toggle("Also with the lid closed", isOn: $settings.keepAwakeLidClosed)
             .disabled(!settings.keepAwakeWhileServing)
-            .onChange(of: settings.keepAwakeOnBattery) { server.keepAwakeSettingChanged() }
-          Text("While serving, start an Amphetamine session to prevent sleep with a closed lid. Requires the free Amphetamine app.")
-            .font(.callout)
-            .foregroundStyle(.secondary)
+          Text(
+            settings.keepAwakeLidClosed
+              ? "On power or battery, with the lid open or closed. Normal sleep returns when the server stops."
+              : "Only when connected to power. On battery, keep the lid open."
+          )
+          .font(.callout)
+          .foregroundStyle(.secondary)
         }
-        VStack(alignment: .leading, spacing: 4) {
-          TextField("End the session below (%)", value: $settings.keepAwakeBatteryFloorPercent, format: .number.grouping(.never))
-            .disabled(!settings.keepAwakeOnBattery)
-            .onChange(of: settings.keepAwakeBatteryFloorPercent) { server.keepAwakeSettingChanged() }
-          Text("Ends the session when the battery gets low. 0 disables.")
-            .font(.callout)
-            .foregroundStyle(.secondary)
-        }
-        VStack(alignment: .leading, spacing: 4) {
-          TextField("Keep-awake limit (hours)", value: $settings.keepAwakeSessionHours, format: .number.grouping(.never))
-            .disabled(!settings.keepAwakeOnBattery)
-            .onChange(of: settings.keepAwakeSessionHours) { server.keepAwakeSettingChanged() }
-          Text("How long a session lasts. Mac will sleep after session ends.")
-            .font(.callout)
-            .foregroundStyle(.secondary)
-        }
-        if settings.keepAwakeWhileServing && settings.keepAwakeOnBattery && server.amphetamineSupportsLidSleep {
-          amphetamineStatusLine
-            .font(.callout)
-            .foregroundStyle(amphetamineStatusTone)
-        }
+        .onChange(of: settings.keepAwakeWhileServing) { server.keepAwakeSettingChanged() }
+        .onChange(of: settings.keepAwakeLidClosed) { server.keepAwakeSettingChanged() }
       }
 
       Section("Cache Folder") {
@@ -104,42 +79,6 @@ struct GeneralSettingsView: View {
   private var needsRestart: Bool {
     guard server.runState == .serving, let running = server.info?.cache else { return false }
     return running != settings.cacheDirectory.path(percentEncoded: false)
-  }
-
-  @ViewBuilder private var amphetamineStatusLine: some View {
-    switch server.amphetamineStatus {
-    case .idle:
-      Text("The Amphetamine session starts when the server is serving.")
-    case .active:
-      Text("Amphetamine session is keeping the Mac awake.")
-    case .maySleepWhenClosed:
-      Text("Amphetamine may still sleep with the lid closed. In its Sessions settings, turn off 'Allow System to Sleep When Display is Closed'.")
-    case .foreignSession:
-      Text("An Amphetamine session you started is keeping the Mac awake.")
-    case .notInstalled:
-      VStack(alignment: .leading, spacing: 2) {
-        Text("Amphetamine is not installed. Get it from the App Store to keep the Mac awake with the lid closed.")
-        Link(
-          "Open Amphetamine in the App Store",
-          destination: URL(string: "macappstore://apps.apple.com/us/app/amphetamine/id937984704?mt=12")!)
-      }
-    case .permissionDenied:
-      Text("Jetlink may not control Amphetamine. Allow it in System Settings > Privacy & Security > Automation.")
-    case .failed(let message):
-      Text("Amphetamine session failed: \(message)")
-    case .batteryFloor(let percent):
-      Text("The session ended at the battery floor (\(percent)%).")
-    case .expired(let hours):
-      Text("The \(hours)-hour keep-awake ran out; the Mac may sleep. Restart the server for another.")
-    }
-  }
-
-  private var amphetamineStatusTone: Color {
-    switch server.amphetamineStatus {
-    case .idle, .foreignSession: .secondary
-    case .active: .green
-    case .maySleepWhenClosed, .notInstalled, .permissionDenied, .failed, .batteryFloor, .expired: .orange
-    }
   }
 
   private func chooseCacheDirectory() {

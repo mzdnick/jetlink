@@ -25,6 +25,17 @@ struct ServerStoreTests {
     #expect(AppSettings(defaults: defaults).backend == .coreml)
   }
 
+  /// Keeping a closed Mac awake is opt-in.
+  @MainActor @Test func lidClosedKeepAwakeIsOffUntilChosen() throws {
+    let suite = "io.zoompilot.jetlink.tests.\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let settings = AppSettings(defaults: defaults)
+    #expect(!settings.keepAwakeLidClosed)
+    settings.keepAwakeLidClosed = true
+    #expect(AppSettings(defaults: defaults).keepAwakeLidClosed)
+  }
+
   /// The scheme's test action passes -startServerOnLaunch NO, so the app
   /// hosting these tests opens no USB link and loads no engine.
   @MainActor @Test func theTestHostStartsNoServer() {
@@ -82,7 +93,7 @@ struct ServerStoreTests {
     settings.transport = .tcp
     settings.tcpPort = Int.random(in: 50_000..<60_000)
     settings.cacheDirectory = cache
-    let store = ServerStore(settings: settings, logs: LogBuffer(), logFile: nil, amphetamine: AmphetamineKeeper(runner: { _ in ("false", nil) }))
+    let store = ServerStore(settings: settings, logs: LogBuffer(), logFile: nil)
     try await store.startIfNeeded()
     #expect(store.runState == .serving)
     #expect(store.info?.port == settings.tcpPort)
@@ -95,52 +106,5 @@ struct ServerStoreTests {
     transport.close()
     await store.stopAndWait()
     #expect(store.runState == .stopped)
-  }
-
-  @MainActor @Test func batteryFloorSettingsRoundTrip() throws {
-    let suite = "io.zoompilot.jetlink.tests.\(UUID().uuidString)"
-    let defaults = try #require(UserDefaults(suiteName: suite))
-    defer { defaults.removePersistentDomain(forName: suite) }
-    let settings = AppSettings(defaults: defaults)
-    #expect(settings.keepAwakeBatteryFloorPercent == 20)
-    settings.keepAwakeBatteryFloorPercent = 15
-    settings.keepAwakeSessionHours = 24
-    let reread = AppSettings(defaults: defaults)
-    #expect(reread.keepAwakeBatteryFloorPercent == 15)
-    #expect(reread.keepAwakeSessionHours == 24)
-    // 0 disables the floor, and the fold migrates an old explicit "off" to it
-    settings.keepAwakeBatteryFloorPercent = 0
-    #expect(AppSettings(defaults: defaults).keepAwakeBatteryFloorPercent == 0)
-    defaults.set(false, forKey: "keepAwakeBatteryFloorEnabled")
-    defaults.set(33, forKey: "keepAwakeBatteryFloorPercent")
-    #expect(AppSettings(defaults: defaults).keepAwakeBatteryFloorPercent == 0)
-  }
-
-  @MainActor @Test func sessionHoursDefaultToEight() throws {
-    let suite = "io.zoompilot.jetlink.tests.\(UUID().uuidString)"
-    let defaults = try #require(UserDefaults(suiteName: suite))
-    defer { defaults.removePersistentDomain(forName: suite) }
-    #expect(AppSettings(defaults: defaults).keepAwakeSessionHours == 8)
-  }
-
-  @MainActor @Test func freeEntryValuesAreClamped() throws {
-    let suite = "io.zoompilot.jetlink.tests.\(UUID().uuidString)"
-    let defaults = try #require(UserDefaults(suiteName: suite))
-    defer { defaults.removePersistentDomain(forName: suite) }
-    let settings = AppSettings(defaults: defaults)
-    // 0 is the legal "off": the floor spans 0-99, and negatives read as off
-    settings.keepAwakeBatteryFloorPercent = 0
-    #expect(settings.keepAwakeBatteryFloorPercent == 0)
-    settings.keepAwakeBatteryFloorPercent = -5
-    #expect(settings.keepAwakeBatteryFloorPercent == 0)
-    settings.keepAwakeBatteryFloorPercent = 500
-    #expect(settings.keepAwakeBatteryFloorPercent == 99)
-    settings.keepAwakeSessionHours = 0
-    #expect(settings.keepAwakeSessionHours == 1)
-    settings.keepAwakeSessionHours = 9000
-    #expect(settings.keepAwakeSessionHours == 8760)
-    // what lands in storage is the clamped value, so a relaunch reads it back
-    #expect(AppSettings(defaults: defaults).keepAwakeBatteryFloorPercent == 99)
-    #expect(AppSettings(defaults: defaults).keepAwakeSessionHours == 8760)
   }
 }

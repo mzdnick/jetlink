@@ -46,12 +46,6 @@ final class ServerStore: ServerControlling {
   private(set) var startedAt: Date?
   var lastFailure: String?
 
-  /// What the battery keep-awake's Amphetamine session is doing, for Settings.
-  var amphetamineStatus: AmphetamineKeeper.Status { amphetamine.status }
-
-  /// Whether lid-close protection applies on this machine at all.
-  var amphetamineSupportsLidSleep: Bool { amphetamine.supportsLidSleep }
-
   let settings: AppSettings
   let logs: LogBuffer
   /// Every event a `ModelStore` cares about: inventory, catalog, download, import.
@@ -60,7 +54,6 @@ final class ServerStore: ServerControlling {
   @ObservationIgnored private let modelEventsContinuation: AsyncStream<ControlEvent>.Continuation
   @ObservationIgnored private let logFile: LogFileWriter?
   @ObservationIgnored private let sleepAssertion: SleepAssertion
-  @ObservationIgnored private let amphetamine: AmphetamineKeeper
   @ObservationIgnored private let isLive: Bool
   @ObservationIgnored private let log = Logger(subsystem: "io.zoompilot.jetlink", category: "server")
   @ObservationIgnored private var embedded: EmbeddedServer?
@@ -70,25 +63,17 @@ final class ServerStore: ServerControlling {
   @ObservationIgnored private var logStream: LogStream?
   @ObservationIgnored private var logTask: Task<Void, Never>?
 
-  init(settings: AppSettings, logs: LogBuffer, logFile: LogFileWriter? = LogFileWriter(), isLive: Bool = true, amphetamine: AmphetamineKeeper? = nil) {
+  init(settings: AppSettings, logs: LogBuffer, logFile: LogFileWriter? = LogFileWriter(), isLive: Bool = true) {
     self.settings = settings
     self.logs = logs
     self.logFile = logFile
     self.isLive = isLive
     self.sleepAssertion = SleepAssertion()
-    self.amphetamine =
-      amphetamine
-      ?? AmphetamineKeeper(
-        floorPercent: { [settings] in
-          let percent = settings.keepAwakeBatteryFloorPercent
-          return percent > 0 ? percent : nil
-        },
-        sessionHours: { [settings] in settings.keepAwakeSessionHours },
-        hasBattery: AmphetamineKeeper.hasInternalBattery())
     let (stream, continuation) = AsyncStream<ControlEvent>.makeStream(bufferingPolicy: .unbounded)
     self.modelEvents = stream
     self.modelEventsContinuation = continuation
     if isLive {
+      sleepAssertion.clearLeftoverLidSleepDisabled()
       sleepAssertion.onPowerSourceChange = { [weak self] in self?.updateSleepAssertion() }
       sleepAssertion.startObservingPowerSource()
     }
@@ -173,13 +158,14 @@ final class ServerStore: ServerControlling {
     default: break
     }
     runState = .stopping
+    // before the engine goes: a quit that times out never gets past it
+    updateSleepAssertion()
     await startTask?.value
     if let embedded {
       await Task.detached { embedded.stop(releasingEngine: true) }.value
     }
     tearDown()
     runState = .stopped
-    updateSleepAssertion()
   }
 
   private func tearDown() {
@@ -266,21 +252,13 @@ final class ServerStore: ServerControlling {
 
   private func updateSleepAssertion() {
     guard isLive else { return }
-    let wanted: Bool
-    if case .serving = runState {
-      wanted =
-        settings.keepAwakeWhileServing
-        && (sleepAssertion.isOnACPower || settings.keepAwakeOnBattery)
-    } else {
-      wanted = false
-    }
-    sleepAssertion.setActive(wanted)
-    // the battery keep-awake rides an Amphetamine session: only its holder
-    // survives a lid close on this OS (see AmphetamineKeeper). It runs on any
-    // power source — a bank or a car outlet reads as AC and sleeps the same —
-    // so the gate is the toggle plus the machine having a battery, which the
-    // keeper checks itself.
-    amphetamine.setActive(wanted && settings.keepAwakeOnBattery)
+    var serving = false
+    if case .serving = runState { serving = settings.keepAwakeWhileServing }
+    // a closed lid idles the Mac on any power source, so that mode holds the
+    // assertion on battery too
+    let lidClosed = serving && settings.keepAwakeLidClosed
+    sleepAssertion.setActive(serving && (lidClosed || sleepAssertion.isOnACPower))
+    sleepAssertion.setLidSleepDisabled(lidClosed)
   }
 
   /// Called by the settings view when a keep-awake setting changes.

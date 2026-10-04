@@ -45,9 +45,7 @@ final class AppSettings {
     static let cacheDirectory = "cacheDirectory"
     static let startServerOnLaunch = "startServerOnLaunch"
     static let keepAwakeWhileServing = "keepAwakeWhileServing"
-    static let keepAwakeOnBattery = "keepAwakeOnBattery"
-    static let keepAwakeBatteryFloorPercent = "keepAwakeBatteryFloorPercent"
-    static let keepAwakeSessionHours = "keepAwakeSessionHours"
+    static let keepAwakeLidClosed = "keepAwakeLidClosed"
   }
 
   @ObservationIgnored private let defaults: UserDefaults
@@ -76,31 +74,8 @@ final class AppSettings {
     didSet { defaults.set(keepAwakeWhileServing, forKey: Key.keepAwakeWhileServing) }
   }
 
-  var keepAwakeOnBattery: Bool {
-    didSet { defaults.set(keepAwakeOnBattery, forKey: Key.keepAwakeOnBattery) }
-  }
-
-  // The free-entry boxes are stored raw (a setter cannot re-assign its own
-  // property under the @Observable macro) and read clamped, so every reader —
-  // field, keeper, status line — sees the same clamped value. The floor reads
-  // 0-99: 0 disables it (a Mac never reports 0% while awake), 99 trips at once.
-  private var storedKeepAwakeBatteryFloorPercent: Int
-  private var storedKeepAwakeSessionHours: Int
-
-  var keepAwakeBatteryFloorPercent: Int {
-    get { min(max(storedKeepAwakeBatteryFloorPercent, 0), 99) }
-    set {
-      storedKeepAwakeBatteryFloorPercent = min(max(newValue, 0), 99)
-      defaults.set(storedKeepAwakeBatteryFloorPercent, forKey: Key.keepAwakeBatteryFloorPercent)
-    }
-  }
-
-  var keepAwakeSessionHours: Int {
-    get { min(max(storedKeepAwakeSessionHours, 1), 8760) }
-    set {
-      storedKeepAwakeSessionHours = min(max(newValue, 1), 8760)
-      defaults.set(storedKeepAwakeSessionHours, forKey: Key.keepAwakeSessionHours)
-    }
+  var keepAwakeLidClosed: Bool {
+    didSet { defaults.set(keepAwakeLidClosed, forKey: Key.keepAwakeLidClosed) }
   }
 
   init(defaults: UserDefaults = .standard) {
@@ -120,13 +95,7 @@ final class AppSettings {
     // (-startServerOnLaunch NO), which an `as? Bool` cast ignores.
     startServerOnLaunch = defaults.object(forKey: Key.startServerOnLaunch) == nil ? true : defaults.bool(forKey: Key.startServerOnLaunch)
     keepAwakeWhileServing = defaults.object(forKey: Key.keepAwakeWhileServing) == nil ? true : defaults.bool(forKey: Key.keepAwakeWhileServing)
-    keepAwakeOnBattery = defaults.object(forKey: Key.keepAwakeOnBattery) == nil ? false : defaults.bool(forKey: Key.keepAwakeOnBattery)
-    // the separate floor toggle folds into the percent: one who had turned it
-    // off reads as 0, so their "off" survives the migration
-    let storedFloorEnabled = defaults.object(forKey: "keepAwakeBatteryFloorEnabled") == nil ? true : defaults.bool(forKey: "keepAwakeBatteryFloorEnabled")
-    let storedFloorPercent = defaults.object(forKey: Key.keepAwakeBatteryFloorPercent) == nil ? 20 : defaults.integer(forKey: Key.keepAwakeBatteryFloorPercent)
-    storedKeepAwakeBatteryFloorPercent = storedFloorEnabled ? storedFloorPercent : 0
-    storedKeepAwakeSessionHours = defaults.object(forKey: Key.keepAwakeSessionHours) == nil ? 8 : defaults.integer(forKey: Key.keepAwakeSessionHours)
+    keepAwakeLidClosed = defaults.bool(forKey: Key.keepAwakeLidClosed)
   }
 
   nonisolated static let defaultTCPPort = 5599
