@@ -76,13 +76,15 @@ final class ServerStore: ServerControlling {
     self.logFile = logFile
     self.isLive = isLive
     self.sleepAssertion = SleepAssertion()
-    self.amphetamine = amphetamine ?? AmphetamineKeeper(
-      floorPercent: { [settings] in
-        let percent = settings.keepAwakeBatteryFloorPercent
-        return percent > 0 ? percent : nil
-      },
-      sessionHours: { [settings] in settings.keepAwakeSessionHours },
-      hasBattery: AmphetamineKeeper.hasInternalBattery())
+    self.amphetamine =
+      amphetamine
+      ?? AmphetamineKeeper(
+        floorPercent: { [settings] in
+          let percent = settings.keepAwakeBatteryFloorPercent
+          return percent > 0 ? percent : nil
+        },
+        sessionHours: { [settings] in settings.keepAwakeSessionHours },
+        hasBattery: AmphetamineKeeper.hasInternalBattery())
     let (stream, continuation) = AsyncStream<ControlEvent>.makeStream(bufferingPolicy: .unbounded)
     self.modelEvents = stream
     self.modelEventsContinuation = continuation
@@ -266,7 +268,8 @@ final class ServerStore: ServerControlling {
     guard isLive else { return }
     let wanted: Bool
     if case .serving = runState {
-      wanted = settings.keepAwakeWhileServing
+      wanted =
+        settings.keepAwakeWhileServing
         && (sleepAssertion.isOnACPower || settings.keepAwakeOnBattery)
     } else {
       wanted = false

@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import Jetlink
 
 /// Answers AppleScript calls in order, recording what was asked. Thread-safe:
@@ -98,8 +99,9 @@ private func waitUntil(_ condition: @escaping () -> Bool) async -> Bool {
       ("false", nil), ("", nil), ("true", nil),
     ])
     let clock = ClockBox(Date(timeIntervalSinceReferenceDate: 0))
-    let keeper = AmphetamineKeeper(runner: runner.run, installed: { true }, running: { true },
-                                   clock: { clock.date })
+    let keeper = AmphetamineKeeper(
+      runner: runner.run, installed: { true }, running: { true },
+      clock: { clock.date })
     keeper.setActive(true)
     #expect(await waitUntil { runner.calls.count >= 2 })
     #expect(keeper.status == .foreignSession)
@@ -134,8 +136,9 @@ private func waitUntil(_ condition: @escaping () -> Bool) async -> Bool {
       ("", nil),
     ])
     let clock = ClockBox(Date(timeIntervalSinceReferenceDate: 0))
-    let keeper = AmphetamineKeeper(runner: runner.run, installed: { true }, running: { true },
-                                   clock: { clock.date })
+    let keeper = AmphetamineKeeper(
+      runner: runner.run, installed: { true }, running: { true },
+      clock: { clock.date })
     keeper.setActive(true)
     #expect(await waitUntil { runner.calls.count >= 3 })
     keeper.setActive(false)
@@ -162,8 +165,9 @@ private func waitUntil(_ condition: @escaping () -> Bool) async -> Bool {
     // desktops have no lid to close: the gate refuses before Amphetamine is
     // ever asked, whatever the toggle says
     let runner = RecordingRunner(replies: [])
-    let keeper = AmphetamineKeeper(runner: runner.run, installed: { true }, running: { true },
-                                   hasBattery: false)
+    let keeper = AmphetamineKeeper(
+      runner: runner.run, installed: { true }, running: { true },
+      hasBattery: false)
     keeper.setActive(true)
     try? await Task.sleep(nanoseconds: 300_000_000)
     #expect(runner.calls.isEmpty)
@@ -173,8 +177,9 @@ private func waitUntil(_ condition: @escaping () -> Bool) async -> Bool {
   @MainActor @Test func belowTheFloorAStartIsRefused() async {
     let runner = RecordingRunner(replies: [])
     let battery = BatteryBox(15)
-    let keeper = AmphetamineKeeper(runner: runner.run, installed: { true },
-                                  batteryLevel: { battery.percent }, floorPercent: { 20 })
+    let keeper = AmphetamineKeeper(
+      runner: runner.run, installed: { true },
+      batteryLevel: { battery.percent }, floorPercent: { 20 })
     keeper.setActive(true)
     try? await Task.sleep(nanoseconds: 300_000_000)
     #expect(runner.calls.isEmpty)
@@ -189,8 +194,9 @@ private func waitUntil(_ condition: @escaping () -> Bool) async -> Bool {
       ("true", nil), ("600", nil),
     ])
     let battery = BatteryBox(5)
-    let keeper = AmphetamineKeeper(runner: runner.run, installed: { true }, running: { true },
-                                  batteryLevel: { battery.percent }, floorPercent: { nil })
+    let keeper = AmphetamineKeeper(
+      runner: runner.run, installed: { true }, running: { true },
+      batteryLevel: { battery.percent }, floorPercent: { nil })
     keeper.setActive(true)
     #expect(await waitUntil { runner.calls.count >= 3 })
     keeper.checkBattery()
@@ -201,8 +207,9 @@ private func waitUntil(_ condition: @escaping () -> Bool) async -> Bool {
   @MainActor @Test func theFloorEndsAnActiveSessionAndHoldsItOff() async {
     let runner = RecordingRunner(replies: [("false", nil), ("", nil), ("true", nil), ("", nil)])
     let battery = BatteryBox(90)
-    let keeper = AmphetamineKeeper(runner: runner.run, installed: { true }, running: { true },
-                                  batteryLevel: { battery.percent }, floorPercent: { 20 })
+    let keeper = AmphetamineKeeper(
+      runner: runner.run, installed: { true }, running: { true },
+      batteryLevel: { battery.percent }, floorPercent: { 20 })
     keeper.setActive(true)
     #expect(await waitUntil { runner.calls.count >= 3 })
     #expect(keeper.status == .active)

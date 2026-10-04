@@ -119,8 +119,9 @@ struct GeneralSettingsView: View {
     case .notInstalled:
       VStack(alignment: .leading, spacing: 2) {
         Text("Amphetamine is not installed. Get it from the App Store to keep the Mac awake with the lid closed.")
-        Link("Open Amphetamine in the App Store",
-             destination: URL(string: "macappstore://apps.apple.com/us/app/amphetamine/id937984704?mt=12")!)
+        Link(
+          "Open Amphetamine in the App Store",
+          destination: URL(string: "macappstore://apps.apple.com/us/app/amphetamine/id937984704?mt=12")!)
       }
     case .permissionDenied:
       Text("Jetlink may not control Amphetamine. Allow it in System Settings > Privacy & Security > Automation.")

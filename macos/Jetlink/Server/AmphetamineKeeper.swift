@@ -50,7 +50,9 @@ private enum Amph {
       }
       log.info("replacing an Amphetamine session with \(remaining, privacy: .public) s left")
     }
-    let (_, startError) = script(runner: runner, "tell application id \"\(bundleID)\"\nstart new session with options {duration:\(sessionHours), interval:hours, displaySleepAllowed:false}\nend tell")
+    let (_, startError) = script(
+      runner: runner,
+      "tell application id \"\(bundleID)\"\nstart new session with options {duration:\(sessionHours), interval:hours, displaySleepAllowed:false}\nend tell")
     if let startError { return denied(startError) ? .denied : .failed(startError) }
     log.info("started an Amphetamine session")
     let (closedDisplay, _) = script(runner: runner, "tell application id \"\(bundleID)\"\nclosed display mode enabled\nend tell")
@@ -106,10 +108,12 @@ private enum Amph {
 
   static func batteryPercent() -> Int? {
     guard let snapshot = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
-          let list = IOPSCopyPowerSourcesList(snapshot)?.takeRetainedValue() as? [CFTypeRef] else { return nil }
+      let list = IOPSCopyPowerSourcesList(snapshot)?.takeRetainedValue() as? [CFTypeRef]
+    else { return nil }
     for source in list {
       if let description = IOPSGetPowerSourceDescription(snapshot, source)?.takeUnretainedValue() as? [String: Any],
-         let capacity = description[kIOPSCurrentCapacityKey as String] as? Int {
+        let capacity = description[kIOPSCurrentCapacityKey as String] as? Int
+      {
         return capacity
       }
     }
@@ -204,22 +208,26 @@ final class AmphetamineKeeper {
   /// battery is the marker. Tests default to true to stay hardware-blind.
   private let hasBattery: Bool
 
-  init(runner: ((String) -> (String?, String?))? = nil,
-       installed: (() -> Bool)? = nil,
-       running: (() -> Bool)? = nil,
-       batteryLevel: (() -> Int?)? = nil,
-       floorPercent: (() -> Int?)? = nil,
-       sessionHours: (() -> Int)? = nil,
-       clock: (() -> Date)? = nil,
-       hasBattery: Bool? = nil) {
+  init(
+    runner: ((String) -> (String?, String?))? = nil,
+    installed: (() -> Bool)? = nil,
+    running: (() -> Bool)? = nil,
+    batteryLevel: (() -> Int?)? = nil,
+    floorPercent: (() -> Int?)? = nil,
+    sessionHours: (() -> Int)? = nil,
+    clock: (() -> Date)? = nil,
+    hasBattery: Bool? = nil
+  ) {
     self.runner = runner ?? Amph.osascript
-    self.installed = installed ?? {
-      let urls = LSCopyApplicationURLsForBundleIdentifier(Amph.bundleID as CFString, nil)?.takeRetainedValue()
-      return (urls as? [URL])?.isEmpty == false
-    }
-    self.running = running ?? {
-      !NSRunningApplication.runningApplications(withBundleIdentifier: Amph.bundleID).isEmpty
-    }
+    self.installed =
+      installed ?? {
+        let urls = LSCopyApplicationURLsForBundleIdentifier(Amph.bundleID as CFString, nil)?.takeRetainedValue()
+        return (urls as? [URL])?.isEmpty == false
+      }
+    self.running =
+      running ?? {
+        !NSRunningApplication.runningApplications(withBundleIdentifier: Amph.bundleID).isEmpty
+      }
     self.batteryLevel = batteryLevel ?? Amph.batteryPercent
     self.floorPercent = floorPercent ?? { nil }
     self.sessionHours = sessionHours ?? { Amph.defaultSessionHours }
@@ -236,10 +244,12 @@ final class AmphetamineKeeper {
   /// 2026-10-03), so the match is on the type key.
   static func hasInternalBattery() -> Bool {
     guard let snapshot = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
-          let list = IOPSCopyPowerSourcesList(snapshot)?.takeRetainedValue() as? [CFTypeRef] else { return false }
+      let list = IOPSCopyPowerSourcesList(snapshot)?.takeRetainedValue() as? [CFTypeRef]
+    else { return false }
     for source in list {
       if let description = IOPSGetPowerSourceDescription(snapshot, source)?.takeUnretainedValue() as? [String: Any],
-         description[kIOPSTypeKey as String] as? String == kIOPSInternalBatteryType {
+        description[kIOPSTypeKey as String] as? String == kIOPSInternalBatteryType
+      {
         return true
       }
     }
@@ -287,7 +297,8 @@ final class AmphetamineKeeper {
       return nil
     }()
     queue.async { [weak self] in
-      let outcome = start
+      let outcome =
+        start
         ? Amph.performStart(runner: runner, installed: installing, sessionHours: hours)
         : verifyLive
           ? Amph.performVerify(runner: runner, installed: installing, running: ampRunning)
