@@ -26,7 +26,9 @@ final class SleepAssertion {
 
   var isHoldingAssertion: Bool { isActive }
 
-  private(set) var isLidSleepDisabled = false
+  /// Saved because the kernel keeps the lid flag after this process exits:
+  /// the first update after a crash clears what it left set.
+  private var isLidSleepDisabled = UserDefaults.standard.bool(forKey: SleepAssertion.lidSleepDisabledKey)
   private static let lidSleepDisabledKey = "lidSleepDisabled"
 
   func setActive(_ active: Bool) {
@@ -54,9 +56,7 @@ final class SleepAssertion {
   }
 
   /// Keeps a lid close from sleeping the Mac: the IOPMrootDomain call behind
-  /// Amphetamine's Closed-Display Mode, which needs no privileges. The kernel
-  /// keeps the flag after this process exits, so holding it is recorded and
-  /// the next launch clears what a crash left behind.
+  /// Amphetamine's Closed-Display Mode, which needs no privileges.
   func setLidSleepDisabled(_ disabled: Bool) {
     // Sent again on every update while held: powerd clears the same flag
     // when an external display or charger comes and goes.
@@ -65,18 +65,10 @@ final class SleepAssertion {
       log.error("could not change sleep on lid close")
       return
     }
-    if disabled != isLidSleepDisabled {
-      log.info("\(disabled ? "keeping the Mac awake with the lid closed" : "a closed lid sleeps the Mac again", privacy: .public)")
-    }
+    guard disabled != isLidSleepDisabled else { return }
     isLidSleepDisabled = disabled
     UserDefaults.standard.set(disabled, forKey: Self.lidSleepDisabledKey)
-  }
-
-  /// Clears the flag a crashed run left set.
-  func clearLeftoverLidSleepDisabled() {
-    guard UserDefaults.standard.bool(forKey: Self.lidSleepDisabledKey) else { return }
-    isLidSleepDisabled = true
-    setLidSleepDisabled(false)
+    log.info("\(disabled ? "keeping the Mac awake with the lid closed" : "a closed lid sleeps the Mac again", privacy: .public)")
   }
 
   private static func setClamshellSleepDisabled(_ disabled: Bool) -> Bool {
@@ -115,7 +107,6 @@ final class SleepAssertion {
   /// Releases everything. Call before dropping the last reference.
   func invalidate() {
     setActive(false)
-    setLidSleepDisabled(false)
     stopObservingPowerSource()
     onPowerSourceChange = nil
   }

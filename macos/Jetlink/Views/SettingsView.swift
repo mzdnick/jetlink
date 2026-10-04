@@ -47,8 +47,7 @@ struct GeneralSettingsView: View {
           .font(.callout)
           .foregroundStyle(.secondary)
         }
-        .onChange(of: settings.keepAwakeWhileServing) { server.keepAwakeSettingChanged() }
-        .onChange(of: settings.keepAwakeLidClosed) { server.keepAwakeSettingChanged() }
+        .onChange(of: [settings.keepAwakeWhileServing, settings.keepAwakeLidClosed]) { server.keepAwakeSettingChanged() }
       }
 
       Section("Cache folder") {

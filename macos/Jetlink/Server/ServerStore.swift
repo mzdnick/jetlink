@@ -37,7 +37,9 @@ enum ServerStoreError: Error, LocalizedError, Equatable {
 @MainActor
 @Observable
 final class ServerStore: ServerControlling {
-  private(set) var runState: ServerRunState = .stopped
+  private(set) var runState: ServerRunState = .stopped {
+    didSet { updateSleepAssertion() }
+  }
   private(set) var info: ServerInfo?
   /// What the screens show of the server, kept from its events.
   let state = ServerViewState()
@@ -73,9 +75,10 @@ final class ServerStore: ServerControlling {
     self.modelEvents = stream
     self.modelEventsContinuation = continuation
     if isLive {
-      sleepAssertion.clearLeftoverLidSleepDisabled()
       sleepAssertion.onPowerSourceChange = { [weak self] in self?.updateSleepAssertion() }
       sleepAssertion.startObservingPowerSource()
+      // stopped, so this clears a lid flag a crashed run left set
+      updateSleepAssertion()
     }
   }
 
@@ -141,7 +144,6 @@ final class ServerStore: ServerControlling {
         self.lastFailure = detail
         self.runState = .failed(detail)
       }
-      self.updateSleepAssertion()
     }
   }
 
@@ -158,8 +160,6 @@ final class ServerStore: ServerControlling {
     default: break
     }
     runState = .stopping
-    // before the engine goes: a quit that times out never gets past it
-    updateSleepAssertion()
     await startTask?.value
     if let embedded {
       await Task.detached { embedded.stop(releasingEngine: true) }.value
@@ -252,8 +252,7 @@ final class ServerStore: ServerControlling {
 
   private func updateSleepAssertion() {
     guard isLive else { return }
-    var serving = false
-    if case .serving = runState { serving = settings.keepAwakeWhileServing }
+    let serving = runState == .serving && settings.keepAwakeWhileServing
     // a closed lid idles the Mac on any power source, so that mode holds the
     // assertion on battery too
     let lidClosed = serving && settings.keepAwakeLidClosed
